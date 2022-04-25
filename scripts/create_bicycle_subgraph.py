@@ -5,12 +5,12 @@
 
 
 import networkx as nx
-import utils
+import blp.utils as utils
 
 cityname = "copenhagen"
 
 raw_G = nx.read_gpickle(
-    "./data/" + cityname + "_graph_simplified.gpickle")
+    "../data/" + cityname + "_graph_simplified.gpickle")
 G = utils.create_bicycle_subgraph(raw_G, attr_name='protected_bicycling')
 
 

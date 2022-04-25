@@ -9,7 +9,7 @@ from haversine import haversine, haversine_vector
 import random
 import itertools
 import numpy as np
-from utils import get_node_positions
+from blp.utils import get_node_positions
 
 
 def dist(v1, v2):

@@ -3,6 +3,6 @@
 from setuptools import find_packages, setup
 
 setup(
-    name='src',
+    name='blp',
     packages=find_packages(),
 )

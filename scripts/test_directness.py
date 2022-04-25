@@ -6,12 +6,12 @@ Script to test and time different ways to measure directness on a graph.
 
 import networkx as nx
 import igraph as ig
-import directness
+import blp.directness as directness
 import time
 
 if __name__ == "__main__":
     G = nx.read_gpickle(
-        "./data/copenhagen_protected_bicycling_graph.gpickle")
+        "../data/copenhagen_protected_bicycling_graph.gpickle")
     lcc_G = G.subgraph(max(nx.connected_components(G),
                                    key=len)).copy()
     lcc_H = ig.Graph.from_networkx(lcc_G)
