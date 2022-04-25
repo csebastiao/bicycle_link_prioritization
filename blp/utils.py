@@ -6,6 +6,117 @@ Useful functions
 
 import numpy as np
 import networkx as nx
+from haversine import haversine, haversine_vector
+
+
+def dist(v1, v2):
+    """
+    From https://github.com/mszell/bikenwgrowth
+    Return the haversine distance in meters between the points v1 and v2,
+    where v1 and v2 are dictionary written like
+    v = {'x': longitude, 'y': latitude}.
+    """
+    return haversine((v1['y'], v1['x']), (v2['y'], v2['x']), unit="m")
+
+
+def dist_vector(v1_list, v2_list):
+    """
+    From https://github.com/mszell/bikenwgrowth
+    Return a list of haversine distance in meters between two list 
+    of points written like 
+    v_list = [[latitude, longitude], [latitude, longitude], ...]. The
+    function will compare the points of each list, so if we have
+    v1_list = [A, B], v2_list = [C, D], we will have as a result
+    the haversine distance between A and C and between B and D.
+    """
+    return haversine_vector(v1_list, v2_list, unit="m") 
+
+# TODO: Make pandas DataFrame so we can have both in same object,
+# just having to change index filter to revert it ?
+def create_node_index(G, revert = False):
+    """
+    Make a dictionary translating node's ID of ascending order into
+    integers starting from 0 and incremeting by 1. By default node's
+    ID are the key, but we can revert it as the value.
+
+    Parameters
+    ----------
+    G : networkx.classes.graph.Graph
+        Graph for which we create the index.
+    revert : bool, optional
+        If False, node's ID are the keys, the count are the values.
+        If True, node's ID are the values, the count are the keys.
+        The default is False.
+
+    Returns
+    -------
+    index_table : dict
+        Dictionary translating node's ID into integers starting from 0.
+
+    """
+    index_table = dict()
+    count = 0
+    if revert is False:
+        for node in sorted(G.nodes):
+            index_table[node] = count
+            count += 1
+    else:
+        for node in sorted(G.nodes):
+            index_table[count] = node
+            count += 1
+    return index_table
+
+def make_summary(G):
+    """Print a summary of useful information on the graph G."""
+    lcc_G = G.subgraph(max(nx.connected_components(G), key=len)).copy()
+    print("""
+          Number of nodes: {} \n
+          Number of edges: {} \n
+          Number of connected components: {} \n
+          Size of the largest connected components: {} nodes and {} edges
+          """.format(
+          len(G.nodes), len(G.edges), len(list(nx.connected_components(G))),
+          len(lcc_G.nodes), len(lcc_G.edges)
+          ))
+
+
+def get_node_positions(G, package = 'networkx'):
+    """
+    Get sorted array of coordinates of every node of the graph G. We can
+    get nodes' positions for networkx graph or igraph graph. The nodes 
+    are sorted either by their ID on networkx or by the index on igraph.
+
+    Parameters
+    ----------
+    G : networkx.classes.graph.Graph or igraph.Graph
+        Graph, type need to correspond to the package argument.
+    package : str, optional
+        Either networkx or igraph, specify the type of graph we use.
+        The default is 'networkx'.
+
+    Raises
+    ------
+    ValueError
+        Argument for the argument package is not networkx nor igraph.
+
+    Returns
+    -------
+    pos_list : list
+        List of coordinates of every nodes.
+
+    """
+    if package == 'networkx': # sorted by node's ID
+        lon = [val for key, val in
+               sorted(nx.get_node_attributes(G, 'x').items())]
+        lat = [val for key, val in
+               sorted(nx.get_node_attributes(G, 'x').items())]
+    elif package == 'igraph': # sorted by node's index
+        lon = G.vs.get_attribute_values('x')
+        lat = G.vs.get_attribute_values('y')
+    else:
+        raise ValueError("package need to be networkx or igraph")
+    pos_list = np.transpose(np.array([lat, lon]))
+    return pos_list
 
 
 def create_bicycle_subgraph(G, attr_name = 'protected_bicycling'):
@@ -40,32 +151,4 @@ def create_bicycle_subgraph(G, attr_name = 'protected_bicycling'):
     #     for attr in G.nodes[node]:
     #         bicycle_subgraph.nodes[node][attr] = G.nodes[node][attr]
     return bicycle_subgraph
-
-
-def make_summary(G):
-    """Print a summary of useful information on the graph G."""
-    lcc_G = G.subgraph(max(nx.connected_components(G), key=len)).copy()
-    print("""
-          Number of nodes: {} \n
-          Number of edges: {} \n
-          Number of connected components: {} \n
-          Size of the largest connected components: {} nodes and {} edges
-          """.format(
-          len(G.nodes), len(G.edges), len(list(nx.connected_components(G))),
-          len(lcc_G.nodes), len(lcc_G.edges)
-          ))
-
-
-def get_node_positions(G, package = 'networkx'):
-    """Get array of coordinates of every node of the graph G."""
-    if package == 'networkx':
-        lon = list(nx.get_node_attributes(G, 'x').values())
-        lat = list(nx.get_node_attributes(G, 'y').values())
-    elif package == 'igraph':
-        lon = G.vs.get_attribute_values('x')
-        lat = G.vs.get_attribute_values('y')
-    else:
-        raise ValueError("package need to be networkx or igraph")
-    pos_list = np.transpose(np.array([lat, lon]))
-    return pos_list
 

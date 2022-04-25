@@ -5,34 +5,81 @@ Functions linked to measure the directness (or circuity) of a graph.
 
 
 import networkx as nx
-from haversine import haversine, haversine_vector
 import random
 import itertools
 import numpy as np
-from blp.utils import get_node_positions
+from blp.utils import get_node_positions, dist, dist_vector
 
+# TODO: Investigate why sometime shortest path is shorter than euclidian one
+def get_directness_matrix_networkx(G, separate = False):
+    """
+    Make a matrix of the ratio between the shortest network distance and
+    the euclidian distance between every pair of nodes. When nodes are
+    from separate components, this ratio is equal to 0. Take advantage
+    of the speed of networkx.all_pairs_dijkstra_path_length that we 
+    sort in order to have a matrix order by node's ID in ascending order.
+    We can use utils.create_node_index in order to have a dictionary
+    between the index and the node's ID.
 
-def dist(v1, v2):
-    """
-    From https://github.com/mszell/bikenwgrowth
-    Return the haversine distance in meters between the points v1 and v2,
-    where v1 and v2 are dictionary written like
-    v = {'x': longitude, 'y': latitude}.
-    """
-    return haversine((v1['y'], v1['x']), (v2['y'], v2['x']), unit="m")
+    Parameters
+    ----------
+    G : networkx.classes.graph.Graph
+        Connected graph.
 
+    Returns
+    -------
+    numpy.ndarray
+        2D Array of the ratio between the shortest network distance and
+        the euclidian distance between every pair of nodes.
 
-def dist_vector(v1_list, v2_list):
     """
-    From https://github.com/mszell/bikenwgrowth
-    Return a list of haversine distance in meters between two list 
-    of points written like 
-    v_list = [[latitude, longitude], [latitude, longitude], ...]. The
-    function will compare the points of each list, so if we have
-    v1_list = [A, B], v2_list = [C, D], we will have as a result
-    the haversine distance between A and C and between B and D.
+    node_list = list(G.nodes)
+    shortest_matrix = []
+    for ids, dic in sorted(dict( # sort the dict then keys of each dict
+            nx.all_pairs_dijkstra_path_length(G, weight='length')).items()):
+        shortest_matrix.append([val for key, val in 
+                                sorted(_fill_dict(dic, node_list).items())])
+    shortest_matrix = np.array(shortest_matrix)
+    pos_list = get_node_positions(G, package='networkx')
+    euclidian_matrix = []
+    for pos in pos_list:
+        euclidian_matrix.append(dist_vector([pos]*len(pos_list), pos_list))
+    euclidian_matrix = np.array(euclidian_matrix)
+    euclidian_matrix[shortest_matrix == 0.0] = 0.0 # avoid division by 0
+    shortest_matrix[shortest_matrix == 0.0] = 1.0
+    if separate is False:
+        return np.divide(euclidian_matrix, shortest_matrix)
+    else:
+        return shortest_matrix, euclidian_matrix
+
+def _fill_dict(dictionary, n_list):
+    """Fill dictionary with 0 for node without a value."""
+    for node in n_list:
+        if node not in dictionary:
+            dictionary[node] = 0.0
+    return dictionary
+
+def directness_from_matrix(mat):
     """
-    return haversine_vector(v1_list, v2_list, unit="m") 
+    Return the directness from a matrix (N, N), N being the number of
+    nodes in a given graph. We can't do a simple mean as every diagonal
+    values, and every values between nodes from different components are
+    equal to 0 and should be discarded, so we divide by the number of
+    nonzero value.
+
+    Parameters
+    ----------
+    mat : numpy.ndarray
+        2D Array of the ratio between the shortest network distance and
+        the euclidian distance between every pair of nodes.
+
+    Returns
+    -------
+    float
+        Linkwise directness of the graph corresponding to mat.
+
+    """
+    return np.sum(mat)/np.count_nonzero(mat)
 
 
 def get_sampled_directness_networkx(G, n = 500):
