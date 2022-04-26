@@ -31,6 +31,7 @@ def dist_vector(v1_list, v2_list):
     """
     return haversine_vector(v1_list, v2_list, unit="m") 
 
+
 # TODO: Make pandas DataFrame so we can have both in same object,
 # just having to change index filter to revert it ?
 def create_node_index(G, revert = False):
@@ -65,6 +66,7 @@ def create_node_index(G, revert = False):
             index_table[count] = node
             count += 1
     return index_table
+
 
 def make_summary(G):
     """Print a summary of useful information on the graph G."""
@@ -109,7 +111,7 @@ def get_node_positions(G, package = 'networkx'):
         lon = [val for key, val in
                sorted(nx.get_node_attributes(G, 'x').items())]
         lat = [val for key, val in
-               sorted(nx.get_node_attributes(G, 'x').items())]
+               sorted(nx.get_node_attributes(G, 'y').items())]
     elif package == 'igraph': # sorted by node's index
         lon = G.vs.get_attribute_values('x')
         lat = G.vs.get_attribute_values('y')

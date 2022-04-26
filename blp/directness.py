@@ -59,6 +59,7 @@ def _fill_dict(dictionary, n_list):
             dictionary[node] = 0.0
     return dictionary
 
+
 def directness_from_matrix(mat):
     """
     Return the directness from a matrix (N, N), N being the number of
@@ -80,6 +81,12 @@ def directness_from_matrix(mat):
 
     """
     return np.sum(mat)/np.count_nonzero(mat)
+
+
+def remove_matrix_link(mat, ind):
+    """Return directness matrix where we removed one node (row and column)"""
+    # Equivalent in pandas : df.loc[df.columns != ind, df.columns != ind]
+    return np.delete(np.delete(mat, ind, 0), ind, 1)
 
 
 def get_sampled_directness_networkx(G, n = 500):

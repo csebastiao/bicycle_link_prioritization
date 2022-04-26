@@ -10,18 +10,32 @@ import blp.directness as directness
 import blp.utils as utils
 import time
 import numpy as np
+import tqdm
+
 
 if __name__ == "__main__":
     G = nx.read_gpickle(
         "../data/copenhagen_protected_bicycling_graph.gpickle")
     
     node_index = utils.create_node_index(G)
+    node_index_rev = utils.create_node_index(G, revert=True)
     
     bef = time.time()
-    sm, em = directness.get_directness_matrix_networkx(G, separate=True)
+    dm = directness.get_directness_matrix_networkx(G, separate=False)
     aft = time.time()
     print(aft - bef, "seconds")
-    print(directness.directness_from_matrix(np.divide(em, sm)))
+    print(directness.directness_from_matrix(dm))
+
+    # Still 1s per directness, but better than 4 minutes
+    # Could only parallelize this, measuring each submatrix directness
+    new_d = 0
+    choice = 0
+    for node in tqdm.tqdm(G.nodes):
+        sdm = directness.remove_matrix_link(dm, node_index[node])
+        if directness.directness_from_matrix(sdm) > new_d:
+            new_d = directness.directness_from_matrix(sdm)
+            choice = node
+
     
     # lcc_G = G.subgraph(max(nx.connected_components(G),
     #                                key=len)).copy()
