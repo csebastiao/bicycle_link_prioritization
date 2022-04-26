@@ -38,7 +38,7 @@ if __name__ == "__main__":
 
     
     # lcc_G = G.subgraph(max(nx.connected_components(G),
-    #                                key=len)).copy()
+    #                                 key=len)).copy()
     
     # bef = time.time()
     # d = directness.get_sampled_directness_networkx(
