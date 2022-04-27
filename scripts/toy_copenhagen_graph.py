@@ -38,8 +38,17 @@ if __name__ == "__main__":
     d_history = [d]
     choice_history = []
     
+    
+    fig, ax = ox.plot_graph(  #this allow to save every step as a png
+        nx.MultiDiGraph(G),
+        filepath=f"../data/images/image_{0:03}.png",
+        save=True, show=False, close=True)
+    xlim = ax.get_xlim()
+    ylim = ax.get_ylim()
+    bb = [ylim[1], ylim[0], xlim[1], xlim[0]]
+    
     for i in tqdm.tqdm(range(len(G) - 2)):
-        # if i%20 == 0:
+        # if i%20 == 0: # to see only some figures
         #     ox.plot_graph(nx.MultiDiGraph(G))
         new_d = 0
         choice = 0
@@ -53,6 +62,9 @@ if __name__ == "__main__":
         G.remove_node(choice)
         dm[node_index[choice],:] = 0
         dm[:, node_index[choice]] = 0
+        fig, ax = ox.plot_graph(nx.MultiDiGraph(G), bbox=bb,
+                                filepath=f"./images/image_{i+1:03}.png",
+                                save=True, show=False, close=True)
 
     plt.figure(figsize=(12,8))
     plt.plot(np.arange(len(d_history)), d_history, linewidth=5)
