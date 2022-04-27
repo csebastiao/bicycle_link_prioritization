@@ -10,7 +10,7 @@ import itertools
 import numpy as np
 from blp.utils import get_node_positions, dist, dist_vector
 
-# TODO: Investigate why sometime shortest path is shorter than euclidian one
+
 def get_directness_matrix_networkx(G, separate = False):
     """
     Make a matrix of the ratio between the shortest network distance and
@@ -83,7 +83,7 @@ def directness_from_matrix(mat):
     return np.sum(mat)/np.count_nonzero(mat)
 
 
-def remove_matrix_link(mat, ind):
+def remove_matrix_node(mat, ind):
     """Return directness matrix where we removed one node (row and column)"""
     # Equivalent in pandas : df.loc[df.columns != ind, df.columns != ind]
     return np.delete(np.delete(mat, ind, 0), ind, 1)

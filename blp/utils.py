@@ -121,6 +121,14 @@ def get_node_positions(G, package = 'networkx'):
     return pos_list
 
 
+def clean_graph_isolated_node(G):
+    """Remove every node that has no link to any other node"""
+    H = G.copy()
+    for node in  G.nodes:
+        if H.degree(node) == 0:
+            H.remove_node(node)
+    return H
+
 def create_bicycle_subgraph(G, attr_name = 'protected_bicycling'):
     """
     Make a subgraph of the graph G as to create a bicycle network

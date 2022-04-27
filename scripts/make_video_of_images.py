@@ -8,8 +8,8 @@ import os
 
 if __name__ == "__main__":
     rev = False # to reverse the image, building instead of destructing
-    folder_name = "sample_copenhagen_linkwise_directness"
-    video_name = "sample_copenhagen_linkwise_directness"
+    folder_name = "s2000_copenhagen_linkwise_directness_wmatup"
+    video_name = folder_name
 
     if rev is True:
         video_name = "../data/" + video_name + "_reverse.mp4"
