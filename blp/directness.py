@@ -11,6 +11,19 @@ import numpy as np
 from blp.utils import get_node_positions, dist, dist_vector
 
 
+def get_edgelist_shortest_path(G):
+    edgelist = dict()
+    for path in dict(nx.all_pairs_dijkstra(G, weight='length')).values():
+        for sp in path[1].values():
+            for f_node, s_node in zip(sp[:-1], sp[1:]):
+                edge_id = G.edges[f_node, s_node]['index']
+                if edge_id in edgelist:
+                    edgelist[edge_id].append([sp[0], sp[-1]])
+                else:
+                    edgelist[edge_id] = [[sp[0], sp[-1]]]
+    return edgelist
+
+
 def get_directness_matrix_networkx(G, separate = False):
     """
     Make a matrix of the ratio between the shortest network distance and
@@ -50,7 +63,7 @@ def get_directness_matrix_networkx(G, separate = False):
     if separate is False:
         return np.divide(euclidian_matrix, shortest_matrix)
     else:
-        return shortest_matrix, euclidian_matrix
+        return euclidian_matrix, shortest_matrix
 
 def _fill_dict(dictionary, n_list):
     """Fill dictionary with 0 for node without a value."""

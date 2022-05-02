@@ -121,13 +121,23 @@ def get_node_positions(G, package = 'networkx'):
     return pos_list
 
 
-def clean_graph_isolated_node(G):
+def clean_isolated_node(G):
     """Remove every node that has no link to any other node"""
     H = G.copy()
     for node in  G.nodes:
         if H.degree(node) == 0:
             H.remove_node(node)
     return H
+
+
+def find_isolated_node(G):
+    """Find every node that has no link to any other node"""
+    islist = []
+    for node in  G.nodes:
+        if G.degree(node) == 0:
+            islist.append(node)
+    return islist
+
 
 def create_bicycle_subgraph(G, attr_name = 'protected_bicycling'):
     """
@@ -162,3 +172,10 @@ def create_bicycle_subgraph(G, attr_name = 'protected_bicycling'):
     #         bicycle_subgraph.nodes[node][attr] = G.nodes[node][attr]
     return bicycle_subgraph
 
+def add_edge_index(G):
+    H = G.copy()
+    count = 0
+    for edge in G.edges:
+        H.edges[edge]['index'] = count
+        count += 1
+    return H

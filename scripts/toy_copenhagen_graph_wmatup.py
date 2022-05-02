@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 Take a smaller and connected part of the bicycle network in Copenhagen
-to test more quickly the workflow.
+to test more quickly the workflow. With matrix update at every step, but
+not every choice of every step, so still not perfectly optimal.
 """
 
 import networkx as nx
@@ -9,7 +10,6 @@ import nerds_osmnx.simplification as sf
 import blp.directness as directness
 import blp.utils as utils
 import numpy as np
-import tqdm
 import osmnx as ox
 from matplotlib import pyplot as plt
 import time
