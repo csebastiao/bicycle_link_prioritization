@@ -179,3 +179,12 @@ def add_edge_index(G):
         H.edges[edge]['index'] = count
         count += 1
     return H
+
+
+def get_area_under_curve(curve, normalize=True):
+    """Get area under the curve to compare"""
+    if normalize is True:
+        curve = (curve - np.min(curve)) / (np.max(curve) - np.min(curve))
+        return np.trapz(curve, dx=1)/len(curve)
+    else:
+        return np.trapz(curve, dx=1)

@@ -8,7 +8,7 @@ import os
 
 if __name__ == "__main__":
     rev = False # to reverse the image, building instead of destructing
-    folder_name = "s2000_copenhagen_linkwise_directness_every_edge"
+    folder_name = "s2000_copenhagen_coverage_relative"
     video_name = folder_name
 
     if rev is True:

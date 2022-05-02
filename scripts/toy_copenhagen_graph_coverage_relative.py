@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Take a smaller and connected part of the bicycle network in Copenhagen
-to test more quickly the workflow. Measure the linkwise directness
-of the entire network for every choice at every step, the best one
-but also the longest one.
+
 """
 
 
@@ -14,12 +11,14 @@ import io
 
 # Custom packages
 from nerds_osmnx import simplification as sf
-from blp import directness
 from blp import utils
 
 # Network extraction, analysis and manipulation
 import networkx as nx
 import osmnx as ox
+
+# Geometry
+import shapely
 
 # Visualization
 from matplotlib import pyplot as plt
@@ -40,14 +39,17 @@ if __name__ == "__main__":
     sim_G = sf.momepy_simplify_graph(nx.MultiDiGraph(rad_G)) # simplify
     fin_G = sf.multidigraph_to_graph(sim_G)
     G = fin_G.copy()
-    dm = directness.get_directness_matrix_networkx(G, separate=False)
-    d = directness.directness_from_matrix(dm)
-    d_history = [d]
+
+    BUFF_SIZE = 0.002
+    geom = dict()
+    for edge in G.edges:
+        geom[edge] = G.edges[edge]['geometry'].buffer(BUFF_SIZE)
+    c_history = [shapely.ops.unary_union(list(geom.values())).area]
     choice_history = []
 
     PAD = len(str(len(G))) # know how many 0 you need to pad for png name
     folder_name = ("s" + f"{RAD}" +
-                   "_copenhagen_linkwise_directness_every_edge")
+                   "_copenhagen_coverage_relative")
 
     fig, ax = ox.plot_graph(  #this allow to save every step as a png
         nx.MultiDiGraph(G),
@@ -59,19 +61,21 @@ if __name__ == "__main__":
 
     COUNT = 1
     while len(G) > 2:
-        batch_d = []
+        bef_area = shapely.ops.unary_union(list(geom.values())).area
+        batch_c = []
         batch_choice = []
-        for u, v in G.edges:
-            H = G.copy()
-            H.remove_edge(u, v)
-            sdm = directness.get_directness_matrix_networkx(H) # new directness
-            batch_d.append(directness.directness_from_matrix(sdm))
-            batch_choice.append([u, v])
-        batch = zip(batch_d, batch_choice)
-        new_d, choice = max(batch) # find max directness + edge we remove
-        d_history.append(new_d)
+        for edge in G.edges:
+            temp_g = geom.copy()
+            temp_g.pop(edge)
+            area = shapely.ops.unary_union(list(temp_g.values())).area
+            batch_c.append((bef_area - area) / G.edges[edge]['length'])
+            batch_choice.append(edge)
+        batch = zip(batch_c, batch_choice)
+        new_c, choice = min(batch)
+        geom.pop(choice)
+        c_history.append(shapely.ops.unary_union(list(geom.values())).area)
         choice_history.append(choice)
-        G.remove_edge(*choice) # remove edge that maximize directness
+        G.remove_edge(*choice)
         G = utils.clean_isolated_node(G) # remove node without edge
         fig, ax = ox.plot_graph(
             nx.MultiDiGraph(G), bbox=bb,
@@ -80,9 +84,9 @@ if __name__ == "__main__":
         COUNT += 1
 
     plt.figure(figsize=(12,8)) # evolution of directness
-    plt.plot(range(len(d_history)), d_history, linewidth=5)
+    plt.plot(range(len(c_history)), c_history, linewidth=5)
     plt.xlabel("Step")
-    plt.ylabel("Linkwise directness")
+    plt.ylabel("Coverage")
     plt.savefig("../data/plot_" + folder_name + ".png")
 
     pr.disable()

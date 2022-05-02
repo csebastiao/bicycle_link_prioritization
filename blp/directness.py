@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Functions linked to measure the directness (or circuity) of a graph.
+Functions to measure the directness (or circuity) of a graph.
 """
 
 
@@ -12,6 +12,26 @@ from blp.utils import get_node_positions, dist, dist_vector
 
 
 def get_edgelist_shortest_path(G):
+    """
+    Make a dictionary where keys are edge being part of a shortest path
+    between at least one pair of node in the graph G, and values are the
+    list of pairs of nodes where the edge is part of the shortest path
+    between the two. Edges are represented by their index, so we have
+    {edge_a:[[node_1, node_2], [node_1, node_3], ...],
+     edge_b:..., 
+     ...}
+
+    Parameters
+    ----------
+    G : networkx.classes.graph.Graph
+        Networkx Graph .
+
+    Returns
+    -------
+    edgelist : dict
+        Dictionary of the edges part of shortest paths on the graph G.
+
+    """
     edgelist = dict()
     for path in dict(nx.all_pairs_dijkstra(G, weight='length')).values():
         for sp in path[1].values():
@@ -37,7 +57,7 @@ def get_directness_matrix_networkx(G, separate = False):
     Parameters
     ----------
     G : networkx.classes.graph.Graph
-        Connected graph.
+        Networkx Graph on which we want to measure directness
 
     Returns
     -------
