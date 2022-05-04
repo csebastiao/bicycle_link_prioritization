@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 Take a smaller and connected part of the bicycle network in Copenhagen
-to test more quickly the workflow. Measure the linkwise directness
-of the entire network for every choice at every step, the best one
-but also the longest one.
+to test more quickly the workflow. Measure the local efficiency, using the
+same tools as for the directness.
 """
 
 
@@ -21,6 +20,9 @@ from blp import utils
 import networkx as nx
 import osmnx as ox
 
+# Math
+import numpy as np
+
 # Visualization
 from matplotlib import pyplot as plt
 
@@ -34,20 +36,28 @@ if __name__ == "__main__":
     lcc_G = com_G.subgraph(max(nx.connected_components(com_G), key=len)).copy()
     node_pos = [12.5500, 55.6825] # find central node
     n = ox.nearest_nodes(lcc_G, *node_pos)
-    RAD = 1000 # make subgraph as radius around central node
+    RAD = 2000 # make subgraph as radius around central node
     rad_G = nx.ego_graph(lcc_G, n, radius=RAD, distance='length')
     rad_G.graph['simplified'] = False
     sim_G = sf.momepy_simplify_graph(nx.MultiDiGraph(rad_G)) # simplify
     fin_G = sf.multidigraph_to_graph(sim_G)
     G = fin_G.copy()
-    dm = directness.get_directness_matrix_networkx(G)
-    d = directness.directness_from_matrix(dm)
-    d_history = [d]
+    node_index = utils.create_node_index(G)
+    sm = directness.get_shortest_network_path_matrix(G)
+    # https://stackoverflow.com/questions/26248654/how-to-return-0-with-divide-by-zero
+    sm = np.divide(np.ones(sm.shape), sm,
+                   out=np.zeros_like(np.ones(sm.shape)), where=sm!=0)
+    em = directness.get_euclidian_distance_matrix(G)
+    em = np.divide(np.ones(em.shape), em,
+                   out=np.zeros_like(np.ones(em.shape)), where=em!=0)
+    em[sm == 0.] = 0.
+    ge = np.sum(sm) / np.sum(em)
+    ge_history = [ge]
     choice_history = []
 
     PAD = len(str(len(G))) # know how many 0 you need to pad for png name
     folder_name = ("s" + f"{RAD}" +
-                   "_copenhagen_linkwise_directness_every_edge")
+                   "_copenhagen_global_efficiency")
 
     fig, ax = ox.plot_graph(  #this allow to save every step as a png
         nx.MultiDiGraph(G),
@@ -59,20 +69,35 @@ if __name__ == "__main__":
 
     COUNT = 1
     while len(G) > 2:
-        batch_d = []
+        batch_ge = []
         batch_choice = []
         for u, v in G.edges:
             H = G.copy()
             H.remove_edge(u, v)
-            sdm = directness.get_directness_matrix_networkx(H) # new directness
-            batch_d.append(directness.directness_from_matrix(sdm))
+            new_em = em.copy()
+            new_sm = directness.get_shortest_network_path_matrix(H)
+            new_sm = np.divide(np.ones(new_sm.shape), new_sm,
+                           out=np.zeros_like(np.ones(new_sm.shape)),
+                           where=new_sm!=0)
+            new_em[new_sm == 0.] = 0.
+            nge = np.sum(new_sm) / np.sum(new_em)
+            batch_ge.append(nge)
             batch_choice.append([u, v])
-        batch = zip(batch_d, batch_choice)
-        new_d, choice = max(batch) # find max directness + edge we remove
-        d_history.append(new_d)
+        batch = zip(batch_ge, batch_choice)
+        new_ge, choice = max(batch) # find max directness + edge we remove
+        ge_history.append(new_ge)
         choice_history.append(choice)
         G.remove_edge(*choice) # remove edge that maximize directness
-        G = utils.clean_isolated_node(G) # remove node without edge
+        node_removed = utils.find_isolated_node(G) # find node without edge
+        for n in node_removed:
+            em = np.delete(em, node_index[n], 0) # delete row
+            em = np.delete(em, node_index[n], 1) # delete column
+            G.remove_node(n) # remove the isolated node
+            node_index = utils.create_node_index(G) # modify index
+
+        ## Same as this, slighlty quicker
+        # G = utils.clean_isolated_node(G) # remove node without edge
+        # em = directness.get_euclidian_distance_matrix(G)
         fig, ax = ox.plot_graph(
             nx.MultiDiGraph(G), bbox=bb,
             filepath="../data/" + folder_name + f"/image_{COUNT:0{PAD}}.png",
@@ -80,9 +105,9 @@ if __name__ == "__main__":
         COUNT += 1
 
     plt.figure(figsize=(12,8)) # evolution of directness
-    plt.plot(range(len(d_history)), d_history, linewidth=5)
+    plt.plot(range(len(ge_history)), ge_history, linewidth=5)
     plt.xlabel("Step")
-    plt.ylabel("Linkwise directness")
+    plt.ylabel("Global Efficiency")
     plt.savefig("../data/plot_" + folder_name + ".png")
 
     pr.disable()

@@ -44,12 +44,14 @@ if __name__ == "__main__":
     geom = dict()
     for edge in G.edges:
         geom[edge] = G.edges[edge]['geometry'].buffer(BUFF_SIZE)
-    c_history = [shapely.ops.unary_union(list(geom.values())).area]
+    bef_area = shapely.ops.unary_union(list(geom.values())).area
+    c_history = [0]
+    area_history = [bef_area]
     choice_history = []
 
     PAD = len(str(len(G))) # know how many 0 you need to pad for png name
     folder_name = ("s" + f"{RAD}" +
-                   "_copenhagen_coverage_relative")
+                   "_copenhagen_relative_coverage")
 
     fig, ax = ox.plot_graph(  #this allow to save every step as a png
         nx.MultiDiGraph(G),
@@ -61,7 +63,6 @@ if __name__ == "__main__":
 
     COUNT = 1
     while len(G) > 2:
-        bef_area = shapely.ops.unary_union(list(geom.values())).area
         batch_c = []
         batch_choice = []
         for edge in G.edges:
@@ -73,7 +74,9 @@ if __name__ == "__main__":
         batch = zip(batch_c, batch_choice)
         new_c, choice = min(batch)
         geom.pop(choice)
-        c_history.append(shapely.ops.unary_union(list(geom.values())).area)
+        bef_area = shapely.ops.unary_union(list(geom.values())).area
+        area_history.append(bef_area)
+        c_history.append(new_c)
         choice_history.append(choice)
         G.remove_edge(*choice)
         G = utils.clean_isolated_node(G) # remove node without edge
@@ -84,10 +87,16 @@ if __name__ == "__main__":
         COUNT += 1
 
     plt.figure(figsize=(12,8)) # evolution of directness
-    plt.plot(range(len(c_history)), c_history, linewidth=5)
+    plt.plot(range(len(area_history)), area_history, linewidth=5)
     plt.xlabel("Step")
     plt.ylabel("Coverage")
     plt.savefig("../data/plot_" + folder_name + ".png")
+
+    plt.figure(figsize=(12,8)) # evolution of directness
+    plt.plot(range(len(c_history)), c_history, linewidth=5)
+    plt.xlabel("Step")
+    plt.ylabel("Relative coverage")
+    plt.savefig("../data/plot_" + folder_name + "_relative.png")
 
     pr.disable()
     s = io.StringIO() # get results of profiler in a text file

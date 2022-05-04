@@ -7,8 +7,8 @@ import cv2
 import os
 
 if __name__ == "__main__":
-    rev = False # to reverse the images, building instead of destructing
-    folder_name = "s2000_copenhagen_additive_directness"
+    rev = True # to reverse the images, building instead of destructing
+    folder_name = "s2000_copenhagen_relative_coverage"
     video_name = folder_name
 
     if rev is True:

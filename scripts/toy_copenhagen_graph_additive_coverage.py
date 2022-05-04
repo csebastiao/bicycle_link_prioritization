@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-# -*- coding: utf-8 -*-
 """
-
+Take a smaller and connected part of the bicycle network in Copenhagen
+to test more quickly the workflow. Make it additive instead of subtractive
 """
 
 
@@ -12,11 +12,13 @@ import io
 
 # Custom packages
 from nerds_osmnx import simplification as sf
-from blp import utils
 
 # Network extraction, analysis and manipulation
 import networkx as nx
 import osmnx as ox
+
+# Math
+import numpy as np
 
 # Geometry
 import shapely
@@ -39,49 +41,60 @@ if __name__ == "__main__":
     rad_G.graph['simplified'] = False
     sim_G = sf.momepy_simplify_graph(nx.MultiDiGraph(rad_G)) # simplify
     fin_G = sf.multidigraph_to_graph(sim_G)
-    G = fin_G.copy()
+    actual_edges = [tuple(np.array(fin_G.edges)[0])]
 
     BUFF_SIZE = 0.002
     geom = dict()
-    for edge in G.edges:
-        geom[edge] = G.edges[edge]['geometry'].buffer(BUFF_SIZE)
+    for edge in actual_edges:
+        geom[edge] = fin_G.edges[edge]['geometry'].buffer(BUFF_SIZE) 
     bef_area = shapely.ops.unary_union(list(geom.values())).area
-    area_history = [bef_area]
-    c_history = [0]
+    c_history = [bef_area]
     choice_history = []
+    area_history = [bef_area]
 
-    PAD = len(str(len(G))) # know how many 0 you need to pad for png name
+    PAD = len(str(len(fin_G.edges))) # how many 0 you need to pad for png name
     folder_name = ("s" + f"{RAD}" +
-                   "_copenhagen_coverage")
+                   "_copenhagen_additive_coverage")
 
-    fig, ax = ox.plot_graph(  #this allow to save every step as a png
-        nx.MultiDiGraph(G),
-        filepath="../data/" + folder_name + f"/image_{0:0{PAD}}.png",
-        save=True, show=False, close=True)
+    fig, ax = ox.plot_graph(  #this allow to have the good bounding box
+        nx.MultiDiGraph(fin_G), show=False, close=True)
     xlim = ax.get_xlim() # keep same size of image for video
     ylim = ax.get_ylim()
     bb = [ylim[1], ylim[0], xlim[1], xlim[0]]
 
+    fig, ax = ox.plot_graph(  #this allow to save every step as a png
+        nx.MultiDiGraph(nx.MultiDiGraph(fin_G.edge_subgraph(actual_edges))),
+        bbox=bb, filepath="../data/" + folder_name + f"/image_{0:0{PAD}}.png",
+        save=True, show=False, close=True)
     COUNT = 1
-    while len(G) > 2:
+    while len(actual_edges) < len(fin_G.edges):
         batch_c = []
-        batch_choice = []
-        for edge in G.edges:
+        batch_choice = [] # Mask to get edges not already in the graph
+        for edge in np.array(fin_G.edges)[ 
+                [(tuple([u, v]) not in actual_edges) for u, v in fin_G.edges]]:
             temp_g = geom.copy()
-            temp_g.pop(edge)
-            batch_c.append(shapely.ops.unary_union(list(temp_g.values())).area)
+            temp_g[tuple(edge)] = fin_G.edges[
+                edge]['geometry'].buffer(BUFF_SIZE)
+            area = shapely.ops.unary_union(list(temp_g.values())).area
+            batch_c.append((area - bef_area) / fin_G.edges[edge]['length'])
             batch_choice.append(edge)
-        batch = zip(batch_c, batch_choice)
-        new_c, choice = max(batch)
-        area_history.append(new_c)
-        c_history.append((bef_area - new_c) / G.edges[choice]['length'])
+        # Need to try because sometimes the difference is so small that it 
+        # can't find one so will look into the edge instead of the metric
+        # to avoid this in this case we will find them individually
+        try:
+            new_c, choice = max(zip(batch_c, batch_choice))
+        except:
+            new_c = max(batch_c)
+            index_max = max(range(len(batch_c)), key=batch_c.__getitem__)
+            choice = batch_choice[index_max]
+        c_history.append(new_c)
         choice_history.append(choice)
-        geom.pop(choice)
+        actual_edges.append(tuple(choice))
+        geom[tuple(choice)] = fin_G.edges[choice]['geometry'].buffer(BUFF_SIZE)
         bef_area = shapely.ops.unary_union(list(geom.values())).area
-        G.remove_edge(*choice)
-        G = utils.clean_isolated_node(G) # remove node without edge
+        area_history.append(bef_area)
         fig, ax = ox.plot_graph(
-            nx.MultiDiGraph(G), bbox=bb,
+            nx.MultiDiGraph(fin_G.edge_subgraph(actual_edges)), bbox=bb,
             filepath="../data/" + folder_name + f"/image_{COUNT:0{PAD}}.png",
             save=True, show=False, close=True)
         COUNT += 1

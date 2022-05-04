@@ -146,7 +146,8 @@ def avoid_zerodiv_matrix(num_mat, den_mat, separate = False):
     by 0. In order to do so, the zero in the denominator are 
     replaced by a constant value, and for the same index the numerator
     values are replaced by 0. As such, division by 0 are replaced by 
-    a 0.
+    a 0. Using 
+    https://stackoverflow.com/questions/26248654/how-to-return-0-with-divide-by-zero
 
     Parameters
     ----------
@@ -166,14 +167,15 @@ def avoid_zerodiv_matrix(num_mat, den_mat, separate = False):
         denominator.
 
     """
-    nmat = num_mat.copy()
-    dmat = den_mat.copy()
-    nmat[dmat == 0.0] = 0.0 # avoid division by 0
-    dmat[dmat == 0.0] = 1.0
     if separate is True:
+        nmat = num_mat.copy()
+        dmat = den_mat.copy()
+        nmat[dmat == 0.0] = 0.0 # avoid division by 0
+        dmat[dmat == 0.0] = 1.0
         return nmat, dmat
     else:
-        return np.divide(nmat, dmat)
+        return np.divide(num_mat, den_mat,
+                         out=np.zeros_like(num_mat), where=den_mat!=0)
 
 
 def directness_from_matrix(mat):
