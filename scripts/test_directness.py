@@ -20,25 +20,25 @@ if __name__ == "__main__":
     node_index = utils.create_node_index(G)
     node_index_rev = utils.create_node_index(G, revert=True)
     
-    bef = time.time()
-    dm = directness.get_directness_matrix_networkx(G, separate=False)
-    aft = time.time()
-    print(aft - bef, "seconds")
-    print(directness.directness_from_matrix(dm))
+    # bef = time.time()
+    # dm = directness.get_directness_matrix_networkx(G, separate=False)
+    # aft = time.time()
+    # print(aft - bef, "seconds")
+    # print(directness.directness_from_matrix(dm))
 
-    # Still 1s per directness, but better than 4 minutes
-    # Could only parallelize this, measuring each submatrix directness
-    new_d = 0
-    choice = 0
-    for node in tqdm.tqdm(G.nodes):
-        sdm = directness.remove_matrix_link(dm, node_index[node])
-        if directness.directness_from_matrix(sdm) > new_d:
-            new_d = directness.directness_from_matrix(sdm)
-            choice = node
+    # # Still 1s per directness, but better than 4 minutes
+    # # Could only parallelize this, measuring each submatrix directness
+    # new_d = 0
+    # choice = 0
+    # for node in tqdm.tqdm(G.nodes):
+    #     sdm = directness.remove_matrix_link(dm, node_index[node])
+    #     if directness.directness_from_matrix(sdm) > new_d:
+    #         new_d = directness.directness_from_matrix(sdm)
+    #         choice = node
 
     
-    # lcc_G = G.subgraph(max(nx.connected_components(G),
-    #                                 key=len)).copy()
+    lcc_G = G.subgraph(max(nx.connected_components(G),
+                                    key=len)).copy()
     
     # bef = time.time()
     # d = directness.get_sampled_directness_networkx(
@@ -62,7 +62,7 @@ if __name__ == "__main__":
     #       d)
     # print(aft - bef, "seconds")
 
-    # lcc_H = ig.Graph.from_networkx(lcc_G)
+    lcc_H = ig.Graph.from_networkx(lcc_G)
 
     # bef = time.time()
     # d = directness.get_directness_linkwise_igraph(

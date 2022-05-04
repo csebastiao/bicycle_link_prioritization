@@ -68,6 +68,40 @@ def create_node_index(G, revert = False):
     return index_table
 
 
+def create_edge_index(G, revert = False):
+    """
+    Make a dictionary translating edge's ID of ascending order into
+    integers starting from 0 and incremeting by 1. By default edge's
+    ID are the key, but we can revert it as the value.
+
+    Parameters
+    ----------
+    G : networkx.classes.graph.Graph
+        Graph for which we create the index.
+    revert : bool, optional
+        If False, node's ID are the keys, the count are the values.
+        If True, node's ID are the values, the count are the keys.
+        The default is False.
+
+    Returns
+    -------
+    index_table : dict
+        Dictionary translating edge's ID into integers starting from 0.
+
+    """
+    index_table = dict()
+    count = 0
+    if revert is False:
+        for edge in sorted(G.edges):
+            index_table[edge] = count
+            count += 1
+    else:
+        for edge in sorted(G.edges):
+            index_table[count] = edge
+            count += 1
+    return index_table
+
+
 def make_summary(G):
     """Print a summary of useful information on the graph G."""
     lcc_G = G.subgraph(max(nx.connected_components(G), key=len)).copy()
@@ -173,6 +207,7 @@ def create_bicycle_subgraph(G, attr_name = 'protected_bicycling'):
     return bicycle_subgraph
 
 def add_edge_index(G):
+    """Add a unique index to every edge to get a quick access"""
     H = G.copy()
     count = 0
     for edge in G.edges:
@@ -182,7 +217,7 @@ def add_edge_index(G):
 
 
 def get_area_under_curve(curve, normalize=True):
-    """Get area under the curve to compare"""
+    """Get area under the curve to compare the efficiency of a curve"""
     if normalize is True:
         curve = (curve - np.min(curve)) / (np.max(curve) - np.min(curve))
         return np.trapz(curve, dx=1)/len(curve)

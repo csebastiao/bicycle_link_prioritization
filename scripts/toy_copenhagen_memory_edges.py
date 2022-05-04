@@ -17,7 +17,6 @@ from blp import utils
 
 # Network extraction, analysis and manipulation
 import networkx as nx
-import igraph as ig
 import osmnx as ox
 
 # Math

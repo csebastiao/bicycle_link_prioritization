@@ -44,7 +44,7 @@ def get_edgelist_shortest_path(G):
     return edgelist
 
 
-def get_directness_matrix_networkx(G, separate = False):
+def get_directness_matrix_networkx(G):
     """
     Make a matrix of the ratio between the shortest network distance and
     the euclidian distance between every pair of nodes. When nodes are
@@ -63,7 +63,35 @@ def get_directness_matrix_networkx(G, separate = False):
     -------
     numpy.ndarray
         2D Array of the ratio between the shortest network distance and
-        the euclidian distance between every pair of nodes.
+        the euclidian distance between every pair of nodes if separate
+        is False. Else, separate 2D Arrays for the shortest network
+        distance and the euclidian distance
+
+    """
+    shortest_matrix = get_shortest_network_path_matrix(G)
+    euclidian_matrix = get_euclidian_distance_matrix(G)
+    return avoid_zerodiv_matrix(euclidian_matrix, shortest_matrix)
+
+
+def get_shortest_network_path_matrix(G):
+    """
+    Return a matrix of the shortest path on the network between every
+    pairs of nodes in the graph G. The matrix is a square matrix (N,N),
+    N being the number of nodes in G. The matrix is symmetrical and
+    the diagonal values are null. The index of the rows and columns
+    are sorted by nodes' ID in ascending order.
+
+    Parameters
+    ----------
+    G : networkx.classes.graph.Graph
+        Networkx Graph on which we want to measure shortest network
+        path.
+
+    Returns
+    -------
+    shortest_matrix : numpy.ndarray
+        2D Array of the shortest path on the network between every 
+        pairs of nodes.
 
     """
     node_list = list(G.nodes)
@@ -73,17 +101,7 @@ def get_directness_matrix_networkx(G, separate = False):
         shortest_matrix.append([val for key, val in 
                                 sorted(_fill_dict(dic, node_list).items())])
     shortest_matrix = np.array(shortest_matrix)
-    pos_list = get_node_positions(G, package='networkx')
-    euclidian_matrix = []
-    for pos in pos_list:
-        euclidian_matrix.append(dist_vector([pos]*len(pos_list), pos_list))
-    euclidian_matrix = np.array(euclidian_matrix)
-    euclidian_matrix[shortest_matrix == 0.0] = 0.0 # avoid division by 0
-    shortest_matrix[shortest_matrix == 0.0] = 1.0
-    if separate is False:
-        return np.divide(euclidian_matrix, shortest_matrix)
-    else:
-        return euclidian_matrix, shortest_matrix
+    return shortest_matrix
 
 def _fill_dict(dictionary, n_list):
     """Fill dictionary with 0 for node without a value."""
@@ -91,6 +109,71 @@ def _fill_dict(dictionary, n_list):
         if node not in dictionary:
             dictionary[node] = 0.0
     return dictionary
+
+
+def get_euclidian_distance_matrix(G):
+    """
+    Return a matrix of the euclidian distance between every
+    pairs of nodes in the graph G. The matrix is a square matrix (N,N),
+    N being the number of nodes in G. The matrix is symmetrical and
+    the diagonal values are null. The index of the rows and columns
+    are sorted by nodes' ID in ascending order.
+
+    Parameters
+    ----------
+    G : networkx.classes.graph.Graph
+        Networkx Graph on which we want to measure euclidian distance.
+
+    Returns
+    -------
+    euclidian_matrix : numpy.ndarray
+        2D Array of the euclidian distance on the network between every 
+        pairs of nodes.
+
+    """
+    pos_list = get_node_positions(G, package='networkx')
+    euclidian_matrix = []
+    for pos in pos_list:
+        euclidian_matrix.append(dist_vector([pos]*len(pos_list), pos_list))
+    euclidian_matrix = np.array(euclidian_matrix)
+    return euclidian_matrix
+
+
+def avoid_zerodiv_matrix(num_mat, den_mat, separate = False):
+    """
+    Adapt two matrix to be able to divise (value per value) the
+    numerator matrix to the denominator matrix by avoiding division
+    by 0. In order to do so, the zero in the denominator are 
+    replaced by a constant value, and for the same index the numerator
+    values are replaced by 0. As such, division by 0 are replaced by 
+    a 0.
+
+    Parameters
+    ----------
+    num_mat : numpy.ndarray
+        Matrix on the numerator.
+    den_mat : numpy.ndarray
+        Matrix on the denominator.
+    separate : bool, optional
+        If True, return the adapted matrix separately, else return the
+        division of the two matrix. The default is False.
+
+    Returns
+    -------
+    numpy.ndarray
+        If separate is True, return separately both matrix with values 
+        adapted, else return the division of the numerator by the
+        denominator.
+
+    """
+    nmat = num_mat.copy()
+    dmat = den_mat.copy()
+    nmat[dmat == 0.0] = 0.0 # avoid division by 0
+    dmat[dmat == 0.0] = 1.0
+    if separate is True:
+        return nmat, dmat
+    else:
+        return np.divide(nmat, dmat)
 
 
 def directness_from_matrix(mat):
