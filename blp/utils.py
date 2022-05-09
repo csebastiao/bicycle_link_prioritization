@@ -216,10 +216,11 @@ def add_edge_index(G):
     return H
 
 
-def get_area_under_curve(curve, normalize=True):
+def get_area_under_curve(curve, normalize_y=False, normalize_x=False):
     """Get area under the curve to compare the efficiency of a curve"""
-    if normalize is True:
+    if normalize_y is True:
         curve = (curve - np.min(curve)) / (np.max(curve) - np.min(curve))
+    if normalize_x is True:
         return np.trapz(curve, dx=1)/len(curve)
     else:
         return np.trapz(curve, dx=1)
