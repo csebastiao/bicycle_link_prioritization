@@ -24,4 +24,8 @@ if __name__ == "__main__":
     rad_G.graph['simplified'] = False
     sim_G = sf.momepy_simplify_graph(nx.MultiDiGraph(rad_G)) # simplify
     fin_G = sf.multidigraph_to_graph(sim_G)
+    G = ox.project_graph(sim_G, to_crs='EPSG:25832')
+    H = ox.consolidate_intersections(G, dead_ends=True)
+    H_fin = sf.multidigraph_to_graph(H)
+    
     
