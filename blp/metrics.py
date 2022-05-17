@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Functions to measure the directness (or circuity) of a graph.
+Functions to measure metrics of a graph.
 """
 
 
@@ -47,7 +47,7 @@ def get_edgelist_shortest_path(G):
 def get_directness_matrix_networkx(G):
     """
     Make a matrix of the ratio between the shortest network distance and
-    the euclidian distance between every pair of nodes. When nodes are
+    the euclidean distance between every pair of nodes. When nodes are
     from separate components, this ratio is equal to 0. Take advantage
     of the speed of networkx.all_pairs_dijkstra_path_length that we 
     sort in order to have a matrix order by node's ID in ascending order.
@@ -63,14 +63,14 @@ def get_directness_matrix_networkx(G):
     -------
     numpy.ndarray
         2D Array of the ratio between the shortest network distance and
-        the euclidian distance between every pair of nodes if separate
+        the euclidean distance between every pair of nodes if separate
         is False. Else, separate 2D Arrays for the shortest network
-        distance and the euclidian distance
+        distance and the euclidean distance
 
     """
     shortest_matrix = get_shortest_network_path_matrix(G)
-    euclidian_matrix = get_euclidian_distance_matrix(G)
-    return avoid_zerodiv_matrix(euclidian_matrix, shortest_matrix)
+    euclidean_matrix = get_euclidean_distance_matrix(G)
+    return avoid_zerodiv_matrix(euclidean_matrix, shortest_matrix)
 
 
 def get_shortest_network_path_matrix(G):
@@ -111,9 +111,9 @@ def _fill_dict(dictionary, n_list):
     return dictionary
 
 
-def get_euclidian_distance_matrix(G):
+def get_euclidean_distance_matrix(G):
     """
-    Return a matrix of the euclidian distance between every
+    Return a matrix of the euclidean distance between every
     pairs of nodes in the graph G. The matrix is a square matrix (N,N),
     N being the number of nodes in G. The matrix is symmetrical and
     the diagonal values are null. The index of the rows and columns
@@ -122,21 +122,21 @@ def get_euclidian_distance_matrix(G):
     Parameters
     ----------
     G : networkx.classes.graph.Graph
-        Networkx Graph on which we want to measure euclidian distance.
+        Networkx Graph on which we want to measure euclidean distance.
 
     Returns
     -------
-    euclidian_matrix : numpy.ndarray
-        2D Array of the euclidian distance on the network between every 
+    euclidean_matrix : numpy.ndarray
+        2D Array of the euclidean distance on the network between every 
         pairs of nodes.
 
     """
     pos_list = get_node_positions(G, package='networkx')
-    euclidian_matrix = []
+    euclidean_matrix = []
     for pos in pos_list:
-        euclidian_matrix.append(dist_vector([pos]*len(pos_list), pos_list))
-    euclidian_matrix = np.array(euclidian_matrix)
-    return euclidian_matrix
+        euclidean_matrix.append(dist_vector([pos]*len(pos_list), pos_list))
+    euclidean_matrix = np.array(euclidean_matrix)
+    return euclidean_matrix
 
 
 def avoid_zerodiv_matrix(num_mat, den_mat, separate = False):
@@ -190,7 +190,7 @@ def directness_from_matrix(mat):
     ----------
     mat : numpy.ndarray
         2D Array of the ratio between the shortest network distance and
-        the euclidian distance between every pair of nodes.
+        the euclidean distance between every pair of nodes.
 
     Returns
     -------
@@ -210,7 +210,7 @@ def remove_matrix_node(mat, ind):
 def get_sampled_directness_networkx(G, n = 500):
     """
     Return the sampled directness of the networkx connected graph G.
-    The directness is the ratio between the sum of the euclidian distance
+    The directness is the ratio between the sum of the euclidean distance
     and the shortest path length of all pairs of nodes in the network.
     To make it quicker, we can only take a sample of nodes n. Note that 
     if we want to take  every node or even a large share of the nodes,
@@ -245,20 +245,20 @@ def get_sampled_directness_networkx(G, n = 500):
         raise TypeError("Graph should be a connected component")
     else:
         shortest_dist = []
-        euclidian_dist = []
+        euclidean_dist = []
         node_list = random.sample(list(G.nodes()), # Take sample of node
                                   min(n, len(G.nodes())))
         for i, j in itertools.combinations(node_list, 2): # For all pairs
                 shortest_dist.append(nx.shortest_path_length(G, source=i,
                                                  target=j, weight='length'))
-                euclidian_dist.append(dist(G.nodes[i], G.nodes[j]))
-        return sum(euclidian_dist) / sum(shortest_dist)
+                euclidean_dist.append(dist(G.nodes[i], G.nodes[j]))
+        return sum(euclidean_dist) / sum(shortest_dist)
 
 
 def get_directness_networkx(G):
     """
     Return the directness of the networkx connected graph G.
-    The directness is the ratio between the sum of the euclidian distance
+    The directness is the ratio between the sum of the euclidean distance
     and the shortest path length of all pairs of nodes in the network. 
     Since we make a dictionary of dictionaries for every node, with keys
     for every node with as the value the length of the shortest path,
@@ -292,16 +292,16 @@ def get_directness_networkx(G):
         pos_list = get_node_positions(G, package='networkx')
         comb = np.array(list(itertools.combinations(pos_list, 2))) # All pairs
         comb = np.reshape(comb, [2, comb.shape[0], 2])
-        euclidian_dist = dist_vector(comb[0], comb[1])
+        euclidean_dist = dist_vector(comb[0], comb[1])
         shortest_dist /= 2 # Divide by 2 to avoid counting twice
-        return sum(euclidian_dist) / shortest_dist
+        return sum(euclidean_dist) / shortest_dist
 
 
 def get_sampled_directness_igraph(G, n = 500):
     """
     From https://github.com/mszell/bikenwgrowth 
     Return the sampled directness of the igraph connected graph G.
-    The directness is the ratio between the sum of the euclidian distance
+    The directness is the ratio between the sum of the euclidean distance
     and the shortest path length of all pairs of nodes in the network.
     To make it quicker, we can only take a sample of nodes n. Since
     we sample a number of node, the value is an approximation, the bigger
@@ -357,7 +357,7 @@ def get_sampled_directness_igraph(G, n = 500):
 def get_directness_igraph(G, detailed = False):
     """
     Return the directness of the igraph connected graph G.
-    The directness is the ratio between the sum of the euclidian distance
+    The directness is the ratio between the sum of the euclidean distance
     and the shortest path length of all pairs of nodes in the network. 
     Since we make a dictionary of dictionaries for every node, with keys
     for every node with as the value the length of the shortest path,
@@ -393,9 +393,9 @@ def get_directness_igraph(G, detailed = False):
         pos_list = get_node_positions(G, package='igraph')
         comb = np.array(list(itertools.combinations(pos_list, 2))) # All pairs
         comb = np.reshape(comb, [2, comb.shape[0], 2])
-        euclidian_dist = dist_vector(comb[0], comb[1])
+        euclidean_dist = dist_vector(comb[0], comb[1])
         shortest_dist /= 2 # Divide by 2 to avoid counting twice
-        return sum(euclidian_dist) / shortest_dist
+        return sum(euclidean_dist) / shortest_dist
 
 
 # TODO: Understand how this one works
@@ -404,7 +404,7 @@ def get_directness_linkwise_igraph(G, n = 500):
     From https://github.com/mszell/bikenwgrowth
     Calculate directness on G over all connected node pairs in indices.
     This is maybe the common calculation method: It takes the average
-    of linkwise euclidian distances divided by network distances.
+    of linkwise euclidean distances divided by network distances.
     If G has multiple components, node pairs in different components
     are discarded.
     

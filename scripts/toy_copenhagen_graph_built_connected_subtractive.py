@@ -46,7 +46,7 @@ if __name__ == "__main__":
                                    key=len)).copy()
         node_pos = [12.5500, 55.6825] # find central node
         n = ox.nearest_nodes(lcc_G, *node_pos)
-        RAD = 2000 # make subgraph as radius around central node
+        RAD = 1000 # make subgraph as radius around central node
         rad_G = nx.ego_graph(lcc_G, n, radius=RAD, distance='length')
         rad_G.graph['simplified'] = False
         sim_G = sf.momepy_simplify_graph(nx.MultiDiGraph(rad_G)) # simplify
@@ -91,7 +91,7 @@ if __name__ == "__main__":
         # Directness
         node_index = utils.create_node_index(G)
         sm = metrics.get_shortest_network_path_matrix(G)
-        em = metrics.get_euclidian_distance_matrix(G)
+        em = metrics.get_euclidean_distance_matrix(G)
         dm = metrics.avoid_zerodiv_matrix(em, sm)
         d = metrics.directness_from_matrix(dm)
         d_history = [d]

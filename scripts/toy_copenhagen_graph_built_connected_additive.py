@@ -88,10 +88,10 @@ if __name__ == "__main__":
     
         # Coverage
         BUFF_SIZE = 0.002
-        geom = []
+        geom = dict()
         for edge in actual_edges:
-            geom.append(G.edges[edge]['geometry'].buffer(BUFF_SIZE))
-        bef_area = shapely.ops.unary_union(geom).area
+            geom[edge] = G.edges[edge]['geometry'].buffer(BUFF_SIZE)
+        bef_area = shapely.ops.unary_union(list(geom.values())).area
         area_history = [bef_area]
     
         # Directness
@@ -118,8 +118,8 @@ if __name__ == "__main__":
             edgelist.remove(choice)
     
             # Coverage
-            geom.append(G.edges[choice]['geometry'].buffer(BUFF_SIZE))
-            bef_area = shapely.ops.unary_union(geom).area
+            geom[choice] = G.edges[choice]['geometry'].buffer(BUFF_SIZE)
+            bef_area = shapely.ops.unary_union(list(geom.values())).area
             area_history.append(bef_area)
 
             # Directness
