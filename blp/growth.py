@@ -156,9 +156,9 @@ def relative_coverage_subtractive_step(
         for edge in edgelist:
             H = G.copy()
             H.remove_edge(*edge)
-            if (nx.number_connected_components(H) > 1) and (
-                    len(sorted(nx.connected_components(H),
-                               key=len)[0]) > 1):
+            if (nx.number_connected_components(H)
+                > nx.number_connected_components(G)) and (
+                    len(sorted(nx.connected_components(H), key=len)[0]) > 1):
                 pass
             else:
                 temp_g = geom.copy()
@@ -181,5 +181,107 @@ def relative_coverage_subtractive_step(
             batch_choice.append(edge)
     batch = zip(batch_m, batch_choice)
     new_m, choice = min(batch)
+    return new_m, choice
+
+
+def directness_additive_step(
+        G, actual_edges, edgelist, keep_connected = False):
+    batch_m = []
+    batch_choice = []
+    if keep_connected is True:
+        for edge in edgelist:
+            temp_edges = actual_edges.copy()
+            temp_edges.append(edge)
+            H = G.edge_subgraph(temp_edges).copy()
+            if (nx.number_connected_components(H)
+                > nx.number_connected_components(
+                    G.edge_subgraph(actual_edges))) and (
+                    len(sorted(nx.connected_components(H), key=len)[0]) > 1):
+                pass
+            else:
+                dm = metrics.get_directness_matrix_networkx(H)
+                batch_m.append(metrics.directness_from_matrix(dm))
+                batch_choice.append(edge)
+    else:
+        for edge in edgelist:
+            temp_edges = actual_edges.copy()
+            temp_edges.append(edge)
+            H = G.edge_subgraph(actual_edges).copy()
+            dm = metrics.get_directness_matrix_networkx(H)
+            batch_m.append(metrics.directness_from_matrix(dm))
+            batch_choice.append(edge)
+    batch = zip(batch_m, batch_choice)
+    new_m, choice = max(batch)
+    return new_m, choice
+
+# TODO
+def relative_directness_additive_step(
+        G, actual_edges, edgelist, keep_connected = False):
+    batch_m = []
+    batch_choice = []
+    if keep_connected is True:
+        for edge in edgelist:
+            temp_edges = actual_edges.copy()
+            temp_edges.append(edge)
+            H = G.edge_subgraph(temp_edges).copy()
+            if (nx.number_connected_components(H)
+                > nx.number_connected_components(
+                    G.edge_subgraph(actual_edges))) and (
+                    len(sorted(nx.connected_components(H), key=len)[0]) > 1):
+                pass
+            else:
+                dm = 0 # TODO
+                batch_m.append(metrics.directness_from_matrix(dm))
+                batch_choice.append(edge)
+    else:
+        for edge in edgelist:
+            temp_edges = actual_edges.copy()
+            temp_edges.append(edge)
+            H = G.edge_subgraph(actual_edges).copy()
+            dm = metrics.get_directness_matrix_networkx(H)
+            batch_m.append(metrics.directness_from_matrix(dm))
+            batch_choice.append(edge)
+    batch = zip(batch_m, batch_choice)
+    new_m, choice = max(batch)
+    return new_m, choice
+
+
+def relative_coverage_additive_step(
+        G, BUFF_SIZE, actual_edges, edgelist,
+        bef_area, geom, keep_connected = False):
+    batch_m = []
+    batch_choice = []
+    if keep_connected is True:
+        for edge in edgelist:
+            temp_edges = actual_edges.copy()
+            temp_edges.append(edge)
+            H = G.edge_subgraph(temp_edges).copy()
+            if (nx.number_connected_components(H)
+                > nx.number_connected_components(
+                    G.edge_subgraph(actual_edges))) and (
+                    len(sorted(nx.connected_components(H), key=len)[0]) > 1):
+                pass
+            else:
+                temp_g = geom.copy()
+                temp_g.append(G.edges[edge]['geometry'].buffer(BUFF_SIZE))
+                area = shapely.ops.unary_union(temp_g).area
+                batch_m.append((area - bef_area) / G.edges[edge]['length'])
+                batch_choice.append(edge)
+    else:
+        for edge in edgelist:
+            temp_g = geom.copy()
+            temp_g.append(G.edges[edge]['geometry'].buffer(BUFF_SIZE))
+            area = shapely.ops.unary_union(temp_g).area
+            batch_m.append((area - bef_area) / G.edges[edge]['length'])
+            batch_choice.append(edge)
+    # Need to try because sometimes the difference is so small that it 
+    # can't find one so will look into the edge instead of the metric
+    # to avoid this in this case we will find them individually
+    try:
+        new_m, choice = max(zip(batch_m, batch_choice))
+    except:
+        new_m = max(batch_m)
+        index_max = max(range(len(batch_m)), key=batch_m.__getitem__)
+        choice = batch_choice[index_max]
     return new_m, choice
 
