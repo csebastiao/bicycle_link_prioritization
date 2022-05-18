@@ -41,7 +41,7 @@ if __name__ == "__main__":
     metric_list = ['relative_coverage', 'directness']
     for metric_choice in metric_list:
         com_G = nx.read_gpickle(
-            "../data/copenhagen_protected_bicycling_graph.gpickle")
+            "../data/all_graph/copenhagen_protected_bicycling_graph.gpickle")
         lcc_G = com_G.subgraph(max(nx.connected_components(com_G),
                                    key=len)).copy()
         node_pos = [12.5500, 55.6825] # find central node
@@ -64,27 +64,9 @@ if __name__ == "__main__":
         edgelist = [edge for edge in G.edges
                     if edge not in actual_edges]
         
-        # Make images of construction
-        fig, ax = ox.plot_graph(  #this allow to have the good bounding box
-            nx.MultiDiGraph(G), show=False, close=True)
-        xlim = ax.get_xlim() # keep same size of image for video
-        ylim = ax.get_ylim()
-        bb = [ylim[1], ylim[0], xlim[1], xlim[0]]
-        
-        PAD = len(str(len(G))) # know how many 0 you need to pad for png name
         folder_name = ("s" + f"{RAD}" +
                        f"_copenhagen_built_connected_additive_{metric_choice}")
-        
-        COLORMAP = 'Reds'
-        c = mpl.cm.get_cmap(COLORMAP)
-        built_color = c(1.0)
-        ec = ox.plot.get_edge_colors_by_attr(nx.MultiDiGraph(G),
-                                             'built', cmap = COLORMAP)
-        fig, ax = ox.plot_graph(  #this allow to save every step as a png
-            nx.MultiDiGraph(G.edge_subgraph(actual_edges)),
-            edge_color=built_color,  bbox=bb,
-            filepath="../data/" + folder_name + f"/image_{0:0{PAD}}.png",
-            save=True, show=False, close=True)
+    
     
         # Coverage
         BUFF_SIZE = 0.002
@@ -101,7 +83,6 @@ if __name__ == "__main__":
         d_history = [d]
         
         choice_history = []
-        COUNT = 1
         while len(edgelist) > 0:
             if metric_choice == 'directness':
                 new_m, choice = growth.directness_additive_step(
@@ -126,17 +107,6 @@ if __name__ == "__main__":
             d_history.append(metrics.directness_from_matrix(
                 metrics.get_directness_matrix_networkx(
                     G.edge_subgraph(actual_edges))))
-
-            # Plot
-            ec = ox.plot.get_edge_colors_by_attr(
-                nx.MultiDiGraph(G.edge_subgraph(actual_edges)),
-                'built', cmap = 'Reds')
-            fig, ax = ox.plot_graph(
-                nx.MultiDiGraph(G.edge_subgraph(actual_edges)),
-                bbox=bb, edge_color=ec,
-                filepath="../data/" + folder_name + f"/image_{COUNT:0{PAD}}.png",
-                save=True, show=False, close=True)
-            COUNT += 1
 
         
 
@@ -163,15 +133,15 @@ if __name__ == "__main__":
             round(utils.get_area_under_curve(
                 d_history, normalize_x=True), 3)))
     
-        fig.savefig(f"../data/plot_s{RAD}_copenhagen_built_connected_additive_{metric_choice}")
+        fig.savefig(f"../data/s{RAD}_copenhagen_built_connected_additive_{metric_choice}_plot")
         plt.close(fig)
         
         with open(
-                f"../data/rrmetric_s{RAD}_copenhagen_built_connected_additive_{metric_choice}.pickle",
+                f"../data/s{RAD}_copenhagen_built_connected_additive_{metric_choice}_arrmetric.pickle",
                 "wb") as fp:
             pickle.dump(metric_history, fp)
         with open(
-                f"../data/arrchoice_s{RAD}_copenhagen_built_connected_additive_{metric_choice}.pickle",
+                f"../data/s{RAD}_copenhagen_built_connected_additive_{metric_choice}_arrchoice.pickle",
                 "wb") as fp:
             pickle.dump(choice_history, fp)
 
