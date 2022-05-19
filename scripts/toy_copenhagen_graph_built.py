@@ -20,7 +20,7 @@ if __name__ == "__main__":
                                key=len)).copy()
     node_pos = [12.5500, 55.6825] # find central node
     n = ox.nearest_nodes(lcc_G, *node_pos)
-    RAD = 1000 # make subgraph as radius around central node
+    RAD = 2000 # make subgraph as radius around central node
     rad_G = nx.ego_graph(lcc_G, n, radius=RAD, distance='length')
     rad_G.graph['simplified'] = False
     sim_G = sf.momepy_simplify_graph(nx.MultiDiGraph(rad_G)) # simplify
@@ -37,18 +37,20 @@ if __name__ == "__main__":
 
     name = f"../data/s{RAD}_copenhagen"
     metric_list = ['relative_coverage', 'directness']
-    order = 'additive'
+    orders = ['additive', 'subtractive']
+    # order = 'additive'
     # order = 'subtractive
-    for metric_choice in metric_list:
-        if order == 'additive':
-            f_name = growth.optimize_additive_growth(G, name, metric_choice)
-            plot.make_image_from_array(f_name, order=order, built=True)
-            plot.make_video_from_image(f_name + "/network_images",
-                                       reverse=False)
-        elif order == 'subtractive':
-            f_name = growth.optimize_additive_growth(G, name, metric_choice)
-            plot.make_image_from_array(f_name, order=order, built=True)
-            plot.make_video_from_image(f_name + "/network_images",
-                                       reverse=True)
-        plot.plot_coverage_directness(f_name,
-                                      optimized=metric_choice, save=True)
+    for order in orders:
+        for metric_choice in metric_list:
+            if order == 'additive':
+                f_name = growth.optimize_additive_growth(G, name, metric_choice)
+                plot.make_image_from_array(f_name, order=order, built=True)
+                plot.make_video_from_image(f_name + "/network_images",
+                                           reverse=False)
+            elif order == 'subtractive':
+                f_name = growth.optimize_subtractive_growth(G, name, metric_choice)
+                plot.make_image_from_array(f_name, order=order, built=True)
+                plot.make_video_from_image(f_name + "/network_images",
+                                           reverse=True)
+            plot.plot_coverage_directness(f_name,
+                                          optimized=metric_choice, save=True)

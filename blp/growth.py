@@ -20,6 +20,130 @@ from blp import utils
 # need to try with multiple built component or no built part, with and
 # without enforcing connectedness, for every metrics
 
+
+# TODO : Find why to choose randomly 2 edges, np.random.choice need 1D
+def random_growth(
+        G, folder_name, order, buff_size = 0.002,
+        override_naming = False, built = True,
+        keep_connected = True, save_network = True, save_metrics = True):
+    if order not in ['subtractive', 'additive']:
+        raise ValueError("""
+                         Value of the order is not valid, please put
+                         either subtractive or additive.
+                         """)
+    if override_naming is False:
+        if built is True:
+            folder_name += "_built"
+        if keep_connected is True:
+            folder_name += "_connected"
+        if order == 'subtractive':
+            folder_name += "_subtractive_random"
+        # Could just use else but allows to be clearer
+        elif order == 'additive':
+            folder_name += "_additive_random"
+    # Make a new folder with the name where every results will be stored
+    if not os.path.exists(folder_name):
+        os.makedirs(folder_name)
+    if save_network is True:
+        nx.write_gpickle(G, folder_name + "/final_network.gpickle")
+    G = G.copy()
+    c_hist = []
+    dir_hist = []
+    cov_hist = []
+    if built is True:
+        edgelist = [edge for edge in G.edges 
+                    if G.edges[edge]['built'] == 0]
+        if order == 'additive':
+            actual_edges = [edge for edge in G.edges
+                            if G.edges[edge]['built'] == 1]
+    else:
+        edgelist = [edge for edge in G.edges]
+        if order == 'additive':
+            actual_edges = []
+    if keep_connected is True:
+        if order == 'subtractive':
+            for i in tqdm.tqdm(range(len(edgelist))):
+                edge_batch = []
+                for edge in edgelist:
+                    H = G.copy()
+                    H.remove_edge(*edge)
+                    if (nx.number_connected_components(H)
+                        > nx.number_connected_components(G)) and (
+                            len(sorted(
+                                nx.connected_components(H), key=len)[0]) > 1):
+                        pass
+                    else:
+                        edge_batch.append(edge)
+                choice = np.random.choice(edge_batch)
+                G.remove_edge(*choice)
+                edgelist.remove(choice)
+                G = utils.clean_isolated_node(G)
+                c_hist.append(choice)
+                geom = [G.edges[edge]['geometry'].buffer(buff_size)
+                        for edge in G.edges]
+                cov_hist.append(shapely.ops.unary_union(geom).area)
+                dir_hist.append(metrics.directness_from_matrix(
+                    metrics.get_directness_matrix_networkx(G)))
+        elif order == 'additive':
+            for i in tqdm.tqdm(range(len(edgelist))):
+                edge_batch = []
+                for edge in edgelist:
+                    temp_edges = actual_edges.copy()
+                    temp_edges.append(edge)
+                    H = G.edge_subgraph(temp_edges).copy()
+                    # See directness_subtractive_step comment on this
+                    if (nx.number_connected_components(H)
+                        > nx.number_connected_components(
+                            G.edge_subgraph(actual_edges))) and (
+                            len(sorted(
+                                nx.connected_components(H), key=len)[0]) > 1):
+                        pass
+                    else:
+                        edge_batch.append(edge)
+                choice = np.random.choice(edge_batch)
+                edgelist.remove(choice)
+                actual_edges.append(choice)
+                c_hist.append(choice)
+                geom = [G.edges[edge]['geometry'].buffer(buff_size)
+                        for edge in actual_edges]
+                cov_hist.append(shapely.ops.unary_union(geom).area)
+                dir_hist.append(metrics.directness_from_matrix(
+                    metrics.get_directness_matrix_networkx(
+                        G.edge_subgraph(actual_edges))))
+    else:
+        if order == 'subtractive':
+            for i in tqdm.tqdm(range(len(edgelist))):
+                choice = np.random.choice(edgelist)
+                G.remove_edge(*choice)
+                edgelist.remove(choice)
+                G = utils.clean_isolated_node(G)
+                c_hist.append(choice)
+                geom = [G.edges[edge]['geometry'].buffer(buff_size)
+                        for edge in G.edges]
+                cov_hist.append(shapely.ops.unary_union(geom).area)
+                dir_hist.append(metrics.directness_from_matrix(
+                    metrics.get_directness_matrix_networkx(G)))
+        elif order == 'additive':
+            for i in tqdm.tqdm(range(len(edgelist))):
+                choice = np.random.choice(edgelist)
+                edgelist.remove(choice)
+                actual_edges.append(choice)
+                c_hist.append(choice)
+                geom = [G.edges[edge]['geometry'].buffer(buff_size)
+                        for edge in actual_edges]
+                cov_hist.append(shapely.ops.unary_union(geom).area)
+                dir_hist.append(metrics.directness_from_matrix(
+                    metrics.get_directness_matrix_networkx(
+                        G.edge_subgraph(actual_edges))))
+    if save_metrics is True:
+        with open(folder_name + "/arrdir.pickle", "wb") as fp:
+            pickle.dump(dir_hist, fp)
+        with open(folder_name + "/arrcov.pickle", "wb") as fp:
+            pickle.dump(cov_hist, fp)
+    with open(folder_name + "/arrchoice.pickle", "wb") as fp:
+        pickle.dump(c_hist, fp)
+    return folder_name
+
 # TODO: Add relative_directness and coverage at least ? Make it consistent
 # with the subtractive one
 def optimize_additive_growth(
@@ -94,10 +218,10 @@ def optimize_additive_growth(
     # based on the options used for the optimization
     if override_naming is False:
         if built is True:
-            folder_name = folder_name + "_built"
+            folder_name += "_built"
         if keep_connected is True:
-            folder_name = folder_name + "_connected"
-        folder_name = folder_name + f"_additive_{metric_optimized}"
+            folder_name += "_connected"
+        folder_name += f"_additive_{metric_optimized}"
     # Make a new folder with the name where every results will be stored
     if not os.path.exists(folder_name):
         os.makedirs(folder_name)
@@ -294,10 +418,10 @@ def optimize_subtractive_growth(
     # based on the options used for the optimization
     if override_naming is False:
         if built is True:
-            folder_name = folder_name + "_built"
+            folder_name += "_built"
         if keep_connected is True:
-            folder_name = folder_name + "_connected"
-        folder_name = folder_name + f"_subtractive_{metric_optimized}"
+            folder_name += "_connected"
+        folder_name += f"_subtractive_{metric_optimized}"
     # Make a new folder with the name where every results will be stored
     if not os.path.exists(folder_name):
         os.makedirs(folder_name)

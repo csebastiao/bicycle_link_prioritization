@@ -13,30 +13,65 @@ import osmnx as ox
 from blp import utils
 
 
-def plot_hysteresis(additive_history, subtractive_history):
+def plot_hysteresis(
+        additive_history, subtractive_history, metric_name = None,
+        normalize_x = True, normalize_y = False):
     with open(additive_history, "rb") as fp:
         add_val = pickle.load(fp)
     with open(subtractive_history, "rb") as fp:
         sub_val = pickle.load(fp)
     sub_val.reverse()
-    fig, ax = plt.figure(figsize=(18, 9))
+    fig = plt.figure(figsize=(18, 9))
+    ax = fig.add_subplot(1, 1, 1)
     ax.plot(range(len(add_val)), add_val, color='b', label='additive')
     ax.plot(range(len(sub_val)), sub_val, color='r', label='subtractive')
-    auc = (utils.get_area_under_curve(add_val, normalize_x=True)
-           - utils.get_area_under_curve(sub_val, normalize_x=True))
+    auc = (utils.get_area_under_curve(
+        sub_val, normalize_x=normalize_x, normalize_y=normalize_y)
+           - utils.get_area_under_curve(
+               add_val, normalize_x=normalize_x, normalize_y=normalize_y))
     ax.set_xlabel("Step")
-    ax.set_ylabel("Metric value")
+    if metric_name is None:
+        ax.set_ylabel("Metric value")
+    else:
+        ax.set_ylabel(metric_name)
     ax.set_title(f"""
-                 Difference in area under curve between additive and
-                 subtractive: {auc}
+                 AUC difference between subtractive and 
+                 additive: {round(auc, 6)}, normalize_x is 
+                 {normalize_x} and normalize_y is {normalize_y}.
                  """)
     ax.legend()
     return fig, ax
 
 
 def plot_coverage_directness(
-        folder_name, coverage_name = None, directness_name = None,
-        optimized = 'coverage', save = False):
+        folder_name, optimized = None, coverage_name = None,
+        directness_name = None, save = False):
+    """
+    
+
+    Parameters
+    ----------
+    folder_name : str
+        Path to the folder where the files for the coverage and the
+        directness are.
+    optimized : str, optional
+        Specify which metric was optimized to produce those values.
+        coverage and relative_coverage will mark the coverage plot
+        while directness, relative_directness and global_efficiency
+        will mark the directness plot. If any other value is used, 
+        a message is printed out and both plot are with the same color.
+    coverage_name : str, optional
+        Name of the pickle file with the coverage value, if None use
+        a standardized name. The default is None.
+    directness_name : str, optional
+        Name of the pickle file with the directness value, if None use
+        a standardized name. The default is None.
+    optimized : str, optional
+        DESCRIPTION. The default is 'coverage'.
+    save : bool, optional
+        If True, save the figure in the folder. The default is False.
+
+    """
     mpl.rcParams.update({'font.size': 16})
     if optimized in ['coverage', 'relative_coverage']:
         colors = ['r', 'b']
@@ -44,10 +79,8 @@ def plot_coverage_directness(
                        'global_efficiency']:
         colors = ['b', 'r']
     else:
-        raise ValueError("""
-                         Incorrect value for optimized, put either
-                         coverage or directness
-                         """)
+        colors = ['b', 'b']
+        print("No valid optimized value as input, same color for both plot.")
     if coverage_name is None:
         with open(folder_name + "/arrcov.pickle", "rb") as fp:
             cov_history = pickle.load(fp)
@@ -112,10 +145,6 @@ def make_image_from_array(
     ------
     ValueError
         Raised if the order value is not valid.
-
-    Returns
-    -------
-    None.
 
     """
     if G is None: # name by default of the gpickle file with the graph
@@ -237,10 +266,6 @@ def make_video_from_image(img_folder_name, reverse = False,
         folder, with reverse added if reverse is True. The default is None.
     fps : int, optional
         Number of frame per second on the video. The default is 5.
-
-    Returns
-    -------
-    None.
 
     """
     folder_name = img_folder_name.rsplit("/", 1)[0]
