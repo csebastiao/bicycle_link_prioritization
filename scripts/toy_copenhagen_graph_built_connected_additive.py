@@ -5,6 +5,10 @@ connected and doing so in a subtractive manner on a toy graph of
 Copenhagen bicycle network.
 """
 
+# System
+import os
+import tqdm
+
 # Profiling
 import cProfile
 import pstats
@@ -35,11 +39,11 @@ import matplotlib as mpl
 
 
 if __name__ == "__main__":
-    pr = cProfile.Profile() # profiler to see what takes time in the script
-    pr.enable()
     mpl.rcParams.update({'font.size': 16})
     metric_list = ['relative_coverage', 'directness']
     for metric_choice in metric_list:
+        pr = cProfile.Profile() # profiler to see what takes time in the script
+        pr.enable()
         com_G = nx.read_gpickle(
             "../data/all_graph/copenhagen_protected_bicycling_graph.gpickle")
         lcc_G = com_G.subgraph(max(nx.connected_components(com_G),
@@ -64,8 +68,11 @@ if __name__ == "__main__":
         edgelist = [edge for edge in G.edges
                     if edge not in actual_edges]
         
-        folder_name = ("s" + f"{RAD}" +
-                       f"_copenhagen_built_connected_additive_{metric_choice}")
+        folder_name = (
+            "../data/s" + f"{RAD}" 
+            + f"_copenhagen_built_connected_additive_{metric_choice}")
+        if not os.path.exists(folder_name):
+            os.makedirs(folder_name)
     
     
         # Coverage
@@ -83,7 +90,7 @@ if __name__ == "__main__":
         d_history = [d]
         
         choice_history = []
-        while len(edgelist) > 0:
+        for i in tqdm.tqdm(range(len(edgelist))):
             if metric_choice == 'directness':
                 new_m, choice = growth.directness_additive_step(
                     G, actual_edges, edgelist, keep_connected = True)
@@ -107,50 +114,17 @@ if __name__ == "__main__":
             d_history.append(metrics.directness_from_matrix(
                 metrics.get_directness_matrix_networkx(
                     G.edge_subgraph(actual_edges))))
-
-        
-
-        if metric_choice == 'relative_coverage':
-            colors = ['r', 'b']
-            metric_history = area_history
-        elif metric_choice in ['directness', 'relative_directness']:
-            colors = ['b', 'r']
-            metric_history = d_history
-        fig, axs = plt.subplots(1, 2, figsize=(24, 12))
-        axs[0].plot(range(len(area_history)), area_history,
-                    linewidth=5, color=colors[0])
-        axs[0].set_xlabel("Step")
-        axs[0].set_ylabel("Coverage")
-        axs[0].set_title("Area under curve (xy_normalized):{}".format(
-            round(utils.get_area_under_curve(
-                area_history, normalize_y=True, normalize_x=True), 3)))
-    
-        axs[1].plot(range(len(d_history)), d_history,
-                    linewidth=5, color=colors[1])
-        axs[1].set_xlabel("Step")
-        axs[1].set_ylabel("Linkwise directness")
-        axs[1].set_title("Area under curve (x_normalized):{}".format(
-            round(utils.get_area_under_curve(
-                d_history, normalize_x=True), 3)))
-    
-        fig.savefig(f"../data/s{RAD}_copenhagen_built_connected_additive_{metric_choice}_plot")
-        plt.close(fig)
-        
-        with open(
-                f"../data/s{RAD}_copenhagen_built_connected_additive_{metric_choice}_arrmetric.pickle",
-                "wb") as fp:
-            pickle.dump(metric_history, fp)
-        with open(
-                f"../data/s{RAD}_copenhagen_built_connected_additive_{metric_choice}_arrchoice.pickle",
-                "wb") as fp:
+        with open(folder_name + "/arrdir.pickle", "wb") as fp:
+            pickle.dump(d_history, fp)
+        with open(folder_name + "/arrcov.pickle", "wb") as fp:
+            pickle.dump(area_history, fp)
+        with open(folder_name + "/arrchoice.pickle", "wb") as fp:
             pickle.dump(choice_history, fp)
-
-
-    pr.disable()
-    s = io.StringIO() # get results of profiler in a text file
-    ps = pstats.Stats(pr, stream=s).sort_stats('tottime')
-    ps.print_stats()
-
-    with open(f'../data/profile_s{RAD}_copenhagen_built_connected_additive_mulobs.txt', 'w+') as f:
-        f.write(s.getvalue())
+        pr.disable()
+        s = io.StringIO() # get results of profiler in a text file
+        ps = pstats.Stats(pr, stream=s).sort_stats('tottime')
+        ps.print_stats()
+    
+        with open(folder_name + '/profile.txt', 'w+') as f:
+            f.write(s.getvalue())
 
