@@ -37,9 +37,11 @@ def plot_hysteresis(additive_history, subtractive_history):
 def plot_coverage_directness(
         folder_name, coverage_name = None, directness_name = None,
         optimized = 'coverage', save = False):
-    if optimized == 'coverage':
+    mpl.rcParams.update({'font.size': 16})
+    if optimized in ['coverage', 'relative_coverage']:
         colors = ['r', 'b']
-    elif optimized == 'directness':
+    elif optimized in ['directness', 'relative_directness',
+                       'global_efficiency']:
         colors = ['b', 'r']
     else:
         raise ValueError("""

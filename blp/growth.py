@@ -3,17 +3,448 @@
 Functions to make subtractive or additive growth of a graph.
 """
 
-
+import os
+import cProfile
+import pstats
+import io
+import tqdm
+import pickle
 import numpy as np
 import networkx as nx
 import shapely
 from blp import metrics
+from blp import utils
+
+
+# TODO : Works with a built component and keeping connected,
+# need to try with multiple built component or no built part, with and
+# without enforcing connectedness, for every metrics
+
+# TODO: Add relative_directness and coverage at least ? Make it consistent
+# with the subtractive one
+def optimize_additive_growth(
+        G, folder_name, metric_optimized, buff_size = 0.002,
+        override_naming = False, built = True,
+        keep_connected = True, profiling = True, 
+        save_network = True, save_metrics = True):
+    """
+    Optimize the additive growth of a network G based on a metric that
+    we want to optimize.
+
+    Parameters
+    ----------
+    G : networkx.classes.graph.Graph
+        Final network.
+    folder_name : str
+        Name of the folder. If override_naming is True, then full name
+        of the folder, otherwise standardized suffixe are added based on
+        the options of the functions.
+    metric_optimized : str
+        Name of the metric optimized. Can be directness and 
+        relative_coverage.
+    buff_size : float, optional
+        Size of the buffer used to measure the coverage.
+        The default is 0.002.
+    override_naming : bool, optional
+        If True, then the folder_name is the full name and nothing is
+        added. The default is False.
+    built : bool, optional
+        If True, make a difference between the built part of the network
+        and the planned part. The default is True.
+    keep_connected : bool, optional
+        If True, the number of components of the graph can never exceed 1
+        if there is not a built network, or the number of components
+        of the built network. The default is True.
+    profiling : bool, optional
+        If True, make a profile of the time spent by the function on 
+        various functions. The default is True.
+    save_network : bool, optional
+        If True, save G as final_network.gpickle in the result's folder.
+        The default is True.
+    save_metrics : bool, optional
+        If True, save the metrics coverage and directness as arrays
+        in the result's folder, under the name
+        arrcov.pickle and arrdir.pickle.
+        The default is True.
+
+    Raises
+    ------
+    ValueError
+        Raised if the value of the input metric_optimized is not a 
+        possible value. metric_optimized can be directness and 
+        relative_coverage.
+
+    Returns
+    -------
+    folder_name : str
+        Final name of the folder where the results are stored. If 
+        override_naming is true, same as the input folder_name.
+
+
+    """
+    if metric_optimized not in ['directness', 'relative_coverage']:
+        raise ValueError("""
+                         Wrong value for metric_optimized, see
+                         documentation for valid metric name.
+                         """)
+    if profiling is True:
+        pr = cProfile.Profile()
+        pr.enable()
+    # If override_naming is False, then create a standardized name
+    # based on the options used for the optimization
+    if override_naming is False:
+        if built is True:
+            folder_name = folder_name + "_built"
+        if keep_connected is True:
+            folder_name = folder_name + "_connected"
+        folder_name = folder_name + f"_additive_{metric_optimized}"
+    # Make a new folder with the name where every results will be stored
+    if not os.path.exists(folder_name):
+        os.makedirs(folder_name)
+    if save_network is True:
+        nx.write_gpickle(G, folder_name + "/final_network.gpickle")
+
+    G = G.copy() # Create a copy to not mutate input
+    if built is True:
+        actual_edges = [edge for edge in G.edges 
+                        if G.edges[edge]['built'] == 1]
+        edgelist = [edge for edge in G.edges 
+                    if G.edges[edge]['built'] == 0]
+    else:
+        actual_edges = []
+        edgelist = [edge for edge in G.edges]
+
+    if built is True:
+        # Coverage
+        geom = dict()
+        for edge in actual_edges:
+            geom[edge] = G.edges[edge]['geometry'].buffer(buff_size)
+        bef_area = shapely.ops.unary_union(list(geom.values())).area
+        cov_hist = [bef_area]
+
+        # Directness
+        dm = metrics.get_directness_matrix_networkx(
+            G.edge_subgraph(actual_edges))
+        d = metrics.directness_from_matrix(dm)
+        dir_hist = [d]
+    else:
+        cov_hist = []
+        dir_hist = []
+
+    c_hist = []
+    if metric_optimized == 'directness':
+        for i in tqdm.tqdm(range(len(edgelist))):
+            new_m, choice = directness_additive_step(
+                G, actual_edges, edgelist, keep_connected = keep_connected)
+            actual_edges, edgelist, geom, c_hist, cov_hist, dir_hist = (
+                _make_additive_changes(
+                    G, choice, buff_size, actual_edges, edgelist,
+                    geom, c_hist, cov_hist, dir_hist))
+    elif metric_optimized == 'relative_coverage':
+        for i in tqdm.tqdm(range(len(edgelist))):
+            new_m, choice = relative_coverage_additive_step(
+                G, buff_size, actual_edges, edgelist,
+                cov_hist[-1], geom, keep_connected = keep_connected)
+            actual_edges, edgelist, geom, c_hist, cov_hist, dir_hist = (
+                _make_additive_changes(
+                    G, choice, buff_size, actual_edges, edgelist,
+                    geom, c_hist, cov_hist, dir_hist))
+    if save_metrics is True:
+        with open(folder_name + "/arrdir.pickle", "wb") as fp:
+            pickle.dump(dir_hist, fp)
+        with open(folder_name + "/arrcov.pickle", "wb") as fp:
+            pickle.dump(cov_hist, fp)
+    with open(folder_name + "/arrchoice.pickle", "wb") as fp:
+        pickle.dump(c_hist, fp)
+    if profiling is True:
+        pr.disable()
+        s = io.StringIO() # get results of profiler in a text file
+        ps = pstats.Stats(pr, stream=s).sort_stats('tottime')
+        ps.print_stats()
+    
+        with open(folder_name + '/profile.txt', 'w+') as f:
+            f.write(s.getvalue())
+    return folder_name
+
+def _make_additive_changes(
+        G, choice, buff_size, actual_edges, edgelist,
+        geom, c_hist, cov_hist, dir_hist):
+    """
+    Append values to their history list, modify arrays and graph based
+    on edge and nodes added for the optimize_additive_growth 
+    function at every step.
+
+    Parameters
+    ----------
+     G : networkx.classes.graph.Graph
+         Network on which we do our analysis.
+     choice : list
+         Edge that we removed defined by the node that are connected,
+         as (u, v), u and v being the nodes' ID connected by the edge.
+    buff_size : float
+        Size of the buffer used to measure the coverage.
+    actual_edges : list
+        List of the edges already grown either built and planned.
+    edgelist : list
+        List of all the edges considered to be removed of G. Edges are
+        defined like choice.
+    geom : dict
+        Dictionary of the buffered geometry of the edges of G, see
+        optimize_additive_growth.
+    c_hist : list
+        History of the edges removed.
+    dir_hist : list
+        History of the directness value, defined as the mean of the sum
+        of the ratio of euclidian and shortest network path distance 
+        between every pairs of nodes in the same component.
+    cov_hist : list
+        History of the coverage value, defined as the area of the union
+        of all the buffered geometry of the edges of G.
+
+    """
+    c_hist.append(choice)
+    actual_edges.append(tuple(choice))
+    edgelist.remove(choice)
+    
+    # Coverage
+    geom[choice] = G.edges[choice]['geometry'].buffer(buff_size)
+    bef_area = shapely.ops.unary_union(list(geom.values())).area
+    cov_hist.append(bef_area)
+    
+    # Directness
+    dir_hist.append(metrics.directness_from_matrix(
+        metrics.get_directness_matrix_networkx(
+            G.edge_subgraph(actual_edges))))
+    return actual_edges, edgelist, geom, c_hist, cov_hist, dir_hist
+
+
+def optimize_subtractive_growth(
+        G, folder_name, metric_optimized, buff_size = 0.002,
+        override_naming = False, built = True,
+        keep_connected = True, profiling = True, 
+        save_network = True, save_metrics = True):
+    """
+    Optimize the subtractive growth of a network G based on a metric that
+    we want to optimize.
+
+    Parameters
+    ----------
+    G : networkx.classes.graph.Graph
+        Final network.
+    folder_name : str
+        Name of the folder. If override_naming is True, then full name
+        of the folder, otherwise standardized suffixe are added based on
+        the options of the functions.
+    metric_optimized : str
+        Name of the metric optimized. Can be directness,
+        relative_directness, coverage, relative_coverage and 
+        global_efficiency.
+    buff_size : float, optional
+        Size of the buffer used to measure the coverage.
+        The default is 0.002.
+    override_naming : bool, optional
+        If True, then the folder_name is the full name and nothing is
+        added. The default is False.
+    built : bool, optional
+        If True, make a difference between the built part of the network
+        and the planned part. The default is True.
+    keep_connected : bool, optional
+        If True, the number of components of the graph can never exceed 1
+        if there is not a built network, or the number of components
+        of the built network. The default is True.
+    profiling : bool, optional
+        If True, make a profile of the time spent by the function on 
+        various functions. The default is True.
+    save_network : bool, optional
+        If True, save G as final_network.gpickle in the result's folder.
+        The default is True.
+    save_metrics : bool, optional
+        If True, save the metrics coverage and directness as arrays
+        in the result's folder, under the name
+        arrcov.pickle and arrdir.pickle.
+        The default is True.
+
+    Raises
+    ------
+    ValueError
+        Raised if the value of the input metric_optimized is not a 
+        possible value. metric_optimized can be directness,
+        relative_directness, coverage, relative_coverage and 
+        global_efficiency.
+
+    Returns
+    -------
+    folder_name : str
+        Final name of the folder where the results are stored. If 
+        override_naming is true, same as the input folder_name.
+
+    """
+    # Verify that input is valid
+    if metric_optimized not in ['directness', 'relative_directness',
+                                'coverage', 'relative_coverage', 
+                                'global_efficiency']:
+        raise ValueError("""
+                         Wrong value for metric_optimized, see
+                         documentation for valid metric name.
+                         """)
+    if profiling is True:
+        pr = cProfile.Profile()
+        pr.enable()
+    # If override_naming is False, then create a standardized name
+    # based on the options used for the optimization
+    if override_naming is False:
+        if built is True:
+            folder_name = folder_name + "_built"
+        if keep_connected is True:
+            folder_name = folder_name + "_connected"
+        folder_name = folder_name + f"_subtractive_{metric_optimized}"
+    # Make a new folder with the name where every results will be stored
+    if not os.path.exists(folder_name):
+        os.makedirs(folder_name)
+    if save_network is True:
+        nx.write_gpickle(G, folder_name + "/final_network.gpickle")
+
+    G = G.copy() # Create a copy to not mutate input
+    if built is True:
+        edgelist = [edge for edge in G.edges 
+                    if G.edges[edge]['built'] == 0]
+    else:
+        edgelist = [edge for edge in G.edges]
+
+    # Initiliaze coverage
+    geom = dict()
+    for edge in G.edges:
+        geom[edge] = G.edges[edge]['geometry'].buffer(buff_size)
+    bef_area = shapely.ops.unary_union(list(geom.values())).area
+    cov_hist = [bef_area]
+
+    # Initiliaze directness
+    sm = metrics.get_shortest_network_path_matrix(G)
+    em = metrics.get_euclidean_distance_matrix(G)
+    dm = metrics.avoid_zerodiv_matrix(em, sm)
+    d = metrics.directness_from_matrix(dm)
+    dir_hist = [d]
+
+    c_hist = []
+    # Optimize based on metric_optimized. First we find the edge to remove
+    # that is optimizing the metric that we want, then we make the changes
+    # to the graph and to the history of choices and metrics values
+    if metric_optimized == 'directness':
+        for i in tqdm.tqdm(range(len(edgelist))):
+            new_m, choice = directness_subtractive_step(
+                G, edgelist, em, keep_connected=keep_connected)
+            edgelist, em, sm, geom, c_hist, dir_hist, cov_hist = (
+                _make_subtractive_changes(G, choice, edgelist, em, sm, geom,
+                                          c_hist, dir_hist, cov_hist))
+    elif metric_optimized == 'relative_directness':
+        for i in tqdm.tqdm(range(len(edgelist))):
+            new_m, choice = relative_directness_subtractive_step(
+                G, edgelist, sm, keep_connected=keep_connected)
+            edgelist, em, sm, geom, c_hist, dir_hist, cov_hist = (
+                _make_subtractive_changes(G, choice, edgelist, em, sm, geom,
+                                          c_hist, dir_hist, cov_hist))
+    elif metric_optimized == 'coverage':
+        for i in tqdm.tqdm(range(len(edgelist))):
+            new_m, choice = coverage_subtractive_step(
+                G, edgelist, geom, keep_connected=keep_connected)
+            edgelist, em, sm, geom, c_hist, dir_hist, cov_hist = (
+                _make_subtractive_changes(G, choice, edgelist, em, sm, geom,
+                              c_hist, dir_hist, cov_hist))
+    elif metric_optimized == 'relative_coverage':
+        for i in tqdm.tqdm(range(len(edgelist))):
+            new_m, choice = relative_coverage_subtractive_step(
+                G, edgelist, cov_hist[-1], geom, keep_connected=keep_connected)
+            edgelist, em, sm, geom, c_hist, dir_hist, cov_hist = (
+                _make_subtractive_changes(G, choice, edgelist, em, sm, geom,
+                                          c_hist, dir_hist, cov_hist))
+    elif metric_optimized == 'global_efficiency':
+        for i in tqdm.tqdm(range(len(edgelist))):
+            new_m, choice = global_efficiency_subtractive_step(
+                G, edgelist, em, keep_connected=keep_connected)
+            edgelist, em, sm, geom, c_hist, dir_hist, cov_hist = (
+                _make_subtractive_changes(G, choice, edgelist, em, sm, geom,
+                                          c_hist, dir_hist, cov_hist))
+    
+    # Save directness, coverage and choice of edge as pickle file
+    if save_metrics is True:
+        with open(folder_name + "/arrdir.pickle", "wb") as fp:
+            pickle.dump(dir_hist, fp)
+        with open(folder_name + "/arrcov.pickle", "wb") as fp:
+            pickle.dump(cov_hist, fp)
+    with open(folder_name + "/arrchoice.pickle", "wb") as fp:
+        pickle.dump(c_hist, fp)
+    if profiling is True:
+        pr.disable()
+        s = io.StringIO() # get results of profiler in a text file
+        ps = pstats.Stats(pr, stream=s).sort_stats('tottime')
+        ps.print_stats()
+        with open(folder_name + '/profile.txt', 'w+') as f:
+            f.write(s.getvalue())
+    return folder_name
+
+def _make_subtractive_changes(
+        G, choice, edgelist, em, sm, geom,
+        c_hist, dir_hist, cov_hist):
+    """
+    Append values to their history list, modify arrays and graph based
+    on edge and nodes removed for the optimize_subtractive_growth 
+    function at every step.
+
+    Parameters
+    ----------
+    G : networkx.classes.graph.Graph
+        Network on which we do our analysis.
+    choice : list
+        Edge that we removed defined by the node that are connected,
+        as (u, v), u and v being the nodes' ID connected by the edge.
+    edgelist : list
+        List of all the edges considered to be removed of G. Edges are
+        defined like choice.
+    em : numpy.ndarray
+        Euclidian matrix, see metrics.get_euclidean_distance_matrix.
+    sm : numpy.ndarray
+        Shortest path matrix, see metrics.get_shortest_network_path_matrix.
+    geom : dict
+        Dictionary of the buffered geometry of the edges of G, see
+        optimize_subtractive_growth.
+    c_hist : list
+        History of the edges removed.
+    dir_hist : list
+        History of the directness value, defined as the mean of the sum
+        of the ratio of euclidian and shortest network path distance 
+        between every pairs of nodes in the same component.
+    cov_hist : list
+        History of the coverage value, defined as the area of the union
+        of all the buffered geometry of the edges of G.
+
+    """
+    c_hist.append(choice)
+    G.remove_edge(*choice) # G mutated outside, don't need to return
+    edgelist.remove(choice)
+    node_removed = utils.find_isolated_node(G) # find node without edge
+    for n in node_removed:
+        node_index = utils.create_node_index(G)
+        em = np.delete(em, node_index[n], 0) # delete row
+        em = np.delete(em, node_index[n], 1) # delete column
+        sm = np.delete(sm, node_index[n], 0) # delete row
+        sm = np.delete(sm, node_index[n], 1) # delete column
+        G.remove_node(n) # remove the isolated node
+
+    # Directness
+    dir_hist.append(metrics.directness_from_matrix(
+        metrics.avoid_zerodiv_matrix(
+            em, metrics.get_shortest_network_path_matrix(G))))
+
+    # Coverage
+    geom.pop(choice)
+    bef_area = shapely.ops.unary_union(list(geom.values())).area
+    cov_hist.append(bef_area)
+    # We return updated value
+    return edgelist, em, sm, geom, c_hist, dir_hist, cov_hist
 
 
 # TODO: Optimize by finding minimum cut set of size 1 and remove these of the
 # edgelist we try instead of passing edges that disconnect the network
-
-
 def directness_subtractive_step(
         G, edgelist, euclid_mat, keep_connected = False):
     """
@@ -141,7 +572,7 @@ def relative_directness_subtractive_step(
 
 
 def global_efficiency_subtractive_step(
-        G, edgelist, iem, keep_connected = False):
+        G, edgelist, em, keep_connected = False):
     """
     Find the edge to remove on the graph G that optimizes the global
     efficiency, and that doesn't create an additional component if
@@ -156,10 +587,9 @@ def global_efficiency_subtractive_step(
         Graph on which we want to remove an edge.
     edgelist : list
         List of the edges that we can remove.
-    iem : numpy.ndarray
-        Array of the inverse of the euclidean distance between
-        every pairs of nodes of the graph G, see
-        metrics.get_euclidean_distance_matrix().
+    em : numpy.ndarray
+        Array of the euclidean distance between every pairs of nodes of
+        the graph G, see metrics.get_euclidean_distance_matrix().
     keep_connected : bool, optional
         If True, edges that can be removed are not creating a new 
         component. The default is False.
@@ -175,6 +605,8 @@ def global_efficiency_subtractive_step(
     """
     batch_m = [] # List of metric value after an edge have been removed
     batch_choice = [] # List of corresponding edge removed
+    iem = np.divide(np.ones(em.shape), em,
+                    out=np.zeros_like(np.ones(em.shape)), where=em!=0)
     if keep_connected is True:
         for edge in edgelist:
             H = G.copy()
@@ -458,7 +890,7 @@ def relative_directness_additive_step(
 
 
 def relative_coverage_additive_step(
-        G, BUFF_SIZE, actual_edges, edgelist,
+        G, buff_size, actual_edges, edgelist,
         bef_area, geom, keep_connected = False):
     """
     Find the edge to add to the actual_edges list from the final graph G
@@ -472,7 +904,7 @@ def relative_coverage_additive_step(
     ----------
     G : networkx.classes.graph.Graph
         Graph on which we want to remove an edge.
-    BUFF_SIZE : float
+    buff_size : float
         Constant that determines the buffer that we apply on the edge's
         geometry. For good results, the BUFFER_SIZE need to be the same
         that the one used for other values from the geom dict.
@@ -513,7 +945,7 @@ def relative_coverage_additive_step(
                 pass
             else:
                 temp_g = geom.copy()
-                temp_g[edge] = G.edges[edge]['geometry'].buffer(BUFF_SIZE)
+                temp_g[edge] = G.edges[edge]['geometry'].buffer(buff_size)
                 # See coverage_subtractive_step comment on this
                 area = shapely.ops.unary_union(list(temp_g.values())).area
                 # See relative_coverage_subtractive_step comment on this,
@@ -524,7 +956,7 @@ def relative_coverage_additive_step(
     else:
         for edge in edgelist:
             temp_g = geom.copy()
-            temp_g.append(G.edges[edge]['geometry'].buffer(BUFF_SIZE))
+            temp_g.append(G.edges[edge]['geometry'].buffer(buff_size))
             area = shapely.ops.unary_union(temp_g).area
             batch_m.append((area - bef_area) / G.edges[edge]['length'])
             batch_choice.append(edge)
