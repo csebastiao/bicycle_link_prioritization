@@ -34,23 +34,50 @@ if __name__ == "__main__":
     for edge in G.edges:
         if edge in G_built.edges:
             G.edges[edge]['built'] = 1
+    
+    local_proj = 'epsg:25832'
+    buff_size = 200
+    
+    import pyproj
+    import shapely
+    proj = pyproj.Transformer.from_proj(
+            pyproj.Proj(init='epsg:4326'),
+            pyproj.Proj(local_proj))
+    test_buff = dict()
+    for edge in G.edges:
+        test_buff[edge] = shapely.ops.transform(
+            proj.transform, G.edges[edge]['geometry']).buffer(buff_size)
+    poly = shapely.ops.unary_union(list(test_buff.values()))
+    poly
 
     name = f"../data/s{RAD}_copenhagen"
     metric_list = ['relative_coverage', 'directness']
-    orders = ['additive', 'subtractive']
-    # order = 'additive'
-    # order = 'subtractive
+    orders = ['subtractive', 'additive']
     for order in orders:
         for metric_choice in metric_list:
             if order == 'additive':
-                f_name = growth.optimize_additive_growth(G, name, metric_choice)
-                plot.make_image_from_array(f_name, order=order, built=True)
+                f_name = growth.optimize_additive_growth(
+                    G, name, metric_choice, buff_size=buff_size,
+                    local_proj=local_proj, override_naming=False,
+                    built=True, keep_connected=True, profiling=True,
+                    save_network=True, save_metrics=True)
+                plot.make_image_from_array(f_name, G=None, order=order,
+                                           built=True, cmap='Reds')
                 plot.make_video_from_image(f_name + "/network_images",
-                                           reverse=False)
+                                           reverse=False, video_name=None,
+                                           fps=5)
             elif order == 'subtractive':
-                f_name = growth.optimize_subtractive_growth(G, name, metric_choice)
-                plot.make_image_from_array(f_name, order=order, built=True)
+                f_name = growth.optimize_subtractive_growth(
+                    G, name, metric_choice, buff_size=buff_size,
+                    local_proj=local_proj, override_naming=False,
+                    built=True, keep_connected=True, profiling=True,
+                    save_network=True, save_metrics=True)
+                plot.make_image_from_array(f_name, G=None, order=order,
+                                           built=True, cmap='Reds')
                 plot.make_video_from_image(f_name + "/network_images",
-                                           reverse=True)
+                                           reverse=True, video_name=None,
+                                           fps=5)
             plot.plot_coverage_directness(f_name,
-                                          optimized=metric_choice, save=True)
+                                          optimized=metric_choice, 
+                                          coverage_name=None,
+                                          directness_name=None, save=True)

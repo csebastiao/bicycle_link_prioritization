@@ -11,6 +11,7 @@ import tqdm
 import pickle
 import numpy as np
 import networkx as nx
+import pyproj
 import shapely
 from blp import metrics
 from blp import utils
@@ -147,8 +148,8 @@ def random_growth(
 # TODO: Add relative_directness and coverage at least ? Make it consistent
 # with the subtractive one
 def optimize_additive_growth(
-        G, folder_name, metric_optimized, buff_size = 0.002,
-        override_naming = False, built = True,
+        G, folder_name, metric_optimized, buff_size = 500, 
+        local_proj = None, override_naming = False, built = True,
         keep_connected = True, profiling = True, 
         save_network = True, save_metrics = True):
     """
@@ -168,7 +169,11 @@ def optimize_additive_growth(
         relative_coverage.
     buff_size : float, optional
         Size of the buffer used to measure the coverage.
-        The default is 0.002.
+        The default is 500.
+    local_proj : str, optional
+        Projected crs of the graph. If None, tries to find it based on the
+        latitude and longitude position of a node in the graph.
+        The default is None.
     override_naming : bool, optional
         If True, then the folder_name is the full name and nothing is
         added. The default is False.
@@ -221,7 +226,7 @@ def optimize_additive_growth(
             folder_name += "_built"
         if keep_connected is True:
             folder_name += "_connected"
-        folder_name += f"_additive_{metric_optimized}"
+        folder_name += f"_additive_bf{buff_size}_{metric_optimized}"
     # Make a new folder with the name where every results will be stored
     if not os.path.exists(folder_name):
         os.makedirs(folder_name)
@@ -237,15 +242,20 @@ def optimize_additive_growth(
     else:
         actual_edges = []
         edgelist = [edge for edge in G.edges]
-
+    
+    # Coverage
+    geom = dict()
+    project = pyproj.Transformer.from_proj(
+            pyproj.Proj(init=pyproj.CRS('epsg:4326')),
+            pyproj.Proj(init=pyproj.CRS(local_proj)))
+    for edge in actual_edges:
+        geom[edge] = shapely.ops.transform(
+            project.transform, G.edges[edge]['geometry']).buffer(buff_size)
+    
+    
     if built is True:
-        # Coverage
-        geom = dict()
-        for edge in actual_edges:
-            geom[edge] = G.edges[edge]['geometry'].buffer(buff_size)
         bef_area = shapely.ops.unary_union(list(geom.values())).area
         cov_hist = [bef_area]
-
         # Directness
         dm = metrics.get_directness_matrix_networkx(
             G.edge_subgraph(actual_edges))
@@ -262,16 +272,16 @@ def optimize_additive_growth(
                 G, actual_edges, edgelist, keep_connected = keep_connected)
             actual_edges, edgelist, geom, c_hist, cov_hist, dir_hist = (
                 _make_additive_changes(
-                    G, choice, buff_size, actual_edges, edgelist,
+                    G, choice, buff_size, project, actual_edges, edgelist,
                     geom, c_hist, cov_hist, dir_hist))
     elif metric_optimized == 'relative_coverage':
         for i in tqdm.tqdm(range(len(edgelist))):
             new_m, choice = relative_coverage_additive_step(
-                G, buff_size, actual_edges, edgelist,
+                G, buff_size, project, actual_edges, edgelist,
                 cov_hist[-1], geom, keep_connected = keep_connected)
             actual_edges, edgelist, geom, c_hist, cov_hist, dir_hist = (
                 _make_additive_changes(
-                    G, choice, buff_size, actual_edges, edgelist,
+                    G, choice, buff_size, project, actual_edges, edgelist,
                     geom, c_hist, cov_hist, dir_hist))
     if save_metrics is True:
         with open(folder_name + "/arrdir.pickle", "wb") as fp:
@@ -291,7 +301,7 @@ def optimize_additive_growth(
     return folder_name
 
 def _make_additive_changes(
-        G, choice, buff_size, actual_edges, edgelist,
+        G, choice, buff_size, project, actual_edges, edgelist,
         geom, c_hist, cov_hist, dir_hist):
     """
     Append values to their history list, modify arrays and graph based
@@ -307,6 +317,9 @@ def _make_additive_changes(
          as (u, v), u and v being the nodes' ID connected by the edge.
     buff_size : float
         Size of the buffer used to measure the coverage.
+    project : pyproj.transformer.Transformer
+        Tranformer modifying the geographic crs to the
+        local projected crs of the graph.
     actual_edges : list
         List of the edges already grown either built and planned.
     edgelist : list
@@ -331,7 +344,8 @@ def _make_additive_changes(
     edgelist.remove(choice)
     
     # Coverage
-    geom[choice] = G.edges[choice]['geometry'].buffer(buff_size)
+    geom[choice] = shapely.ops.transform(
+        project.transform, G.edges[choice]['geometry']).buffer(buff_size)
     bef_area = shapely.ops.unary_union(list(geom.values())).area
     cov_hist.append(bef_area)
     
@@ -343,8 +357,8 @@ def _make_additive_changes(
 
 
 def optimize_subtractive_growth(
-        G, folder_name, metric_optimized, buff_size = 0.002,
-        override_naming = False, built = True,
+        G, folder_name, metric_optimized, buff_size = 500, 
+        local_proj = None, override_naming = False, built = True,
         keep_connected = True, profiling = True, 
         save_network = True, save_metrics = True):
     """
@@ -365,7 +379,11 @@ def optimize_subtractive_growth(
         global_efficiency.
     buff_size : float, optional
         Size of the buffer used to measure the coverage.
-        The default is 0.002.
+        The default is 500.
+    local_proj : str, optional
+        Projected crs of the graph. If None, tries to find it based on the
+        latitude and longitude position of a node in the graph.
+        The default is None.
     override_naming : bool, optional
         If True, then the folder_name is the full name and nothing is
         added. The default is False.
@@ -421,7 +439,7 @@ def optimize_subtractive_growth(
             folder_name += "_built"
         if keep_connected is True:
             folder_name += "_connected"
-        folder_name += f"_subtractive_{metric_optimized}"
+        folder_name += f"_subtractive_bf{buff_size}_{metric_optimized}"
     # Make a new folder with the name where every results will be stored
     if not os.path.exists(folder_name):
         os.makedirs(folder_name)
@@ -437,8 +455,15 @@ def optimize_subtractive_growth(
 
     # Initiliaze coverage
     geom = dict()
+    
+    #TODO: If None, find projected crs with lat and long
+    project = pyproj.Transformer.from_proj(
+            pyproj.Proj(init=pyproj.CRS('epsg:4326')),
+            pyproj.Proj(init=pyproj.CRS(local_proj)))
     for edge in G.edges:
-        geom[edge] = G.edges[edge]['geometry'].buffer(buff_size)
+        geom[edge] = shapely.ops.transform(
+            project.transform,
+            G.edges[edge]['geometry']).buffer(buff_size)
     bef_area = shapely.ops.unary_union(list(geom.values())).area
     cov_hist = [bef_area]
 
@@ -1014,7 +1039,7 @@ def relative_directness_additive_step(
 
 
 def relative_coverage_additive_step(
-        G, buff_size, actual_edges, edgelist,
+        G, buff_size, project, actual_edges, edgelist,
         bef_area, geom, keep_connected = False):
     """
     Find the edge to add to the actual_edges list from the final graph G
@@ -1032,6 +1057,9 @@ def relative_coverage_additive_step(
         Constant that determines the buffer that we apply on the edge's
         geometry. For good results, the BUFFER_SIZE need to be the same
         that the one used for other values from the geom dict.
+    project : pyproj.transformer.Transformer
+        Tranformer modifying the geographic crs to the
+        local projected crs of the graph.
     actual_edges : list
         List of the edges that are already created from G.
     edgelist : list
@@ -1069,7 +1097,9 @@ def relative_coverage_additive_step(
                 pass
             else:
                 temp_g = geom.copy()
-                temp_g[edge] = G.edges[edge]['geometry'].buffer(buff_size)
+                temp_g[edge] = shapely.ops.transform(
+                    project.transform,
+                    G.edges[edge]['geometry']).buffer(buff_size)
                 # See coverage_subtractive_step comment on this
                 area = shapely.ops.unary_union(list(temp_g.values())).area
                 # See relative_coverage_subtractive_step comment on this,
@@ -1080,7 +1110,9 @@ def relative_coverage_additive_step(
     else:
         for edge in edgelist:
             temp_g = geom.copy()
-            temp_g.append(G.edges[edge]['geometry'].buffer(buff_size))
+            temp_g[edge] = shapely.ops.transform(
+                project.transform,
+                G.edges[edge]['geometry']).buffer(buff_size)
             area = shapely.ops.unary_union(temp_g).area
             batch_m.append((area - bef_area) / G.edges[edge]['length'])
             batch_choice.append(edge)
@@ -1094,7 +1126,6 @@ def relative_coverage_additive_step(
         new_m, choice = max(zip(batch_m, batch_choice))
     except:
         new_m = max(batch_m)
-        # TODO: Verify
         index_max = max(range(len(batch_m)), key=batch_m.__getitem__)
         choice = batch_choice[index_max]
     return new_m, choice
