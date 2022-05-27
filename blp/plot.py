@@ -168,7 +168,7 @@ def make_image_from_array(
             xlim = ax.get_xlim() # keep same size of image for video
             ylim = ax.get_ylim()
             bb = [ylim[1], ylim[0], xlim[1], xlim[0]]
-            for idx, edge in enumerate(choice_history):
+            for idx, edge in enumerate(choice_history[:-1]):
                 G.remove_edge(*edge)
                 G = utils.clean_isolated_node(G) # remove node without edge
                 fig, ax = ox.plot_graph(

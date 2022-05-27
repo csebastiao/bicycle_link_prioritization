@@ -52,14 +52,14 @@ if __name__ == "__main__":
 
     name = f"../data/s{RAD}_copenhagen"
     metric_list = ['relative_coverage', 'directness']
-    orders = ['subtractive', 'additive']
+    orders = ['additive', 'subtractive']
     for order in orders:
         for metric_choice in metric_list:
             if order == 'additive':
                 f_name = growth.optimize_additive_growth(
-                    G, name, metric_choice, buff_size=buff_size,
-                    local_proj=local_proj, override_naming=False,
-                    built=True, keep_connected=True, profiling=True,
+                    G, name, metric_choice, local_proj,
+                    buff_size=buff_size, override_naming=False,
+                    built=True, keep_connected=False, profiling=True,
                     save_network=True, save_metrics=True)
                 plot.make_image_from_array(f_name, G=None, order=order,
                                            built=True, cmap='Reds')
@@ -68,9 +68,9 @@ if __name__ == "__main__":
                                            fps=5)
             elif order == 'subtractive':
                 f_name = growth.optimize_subtractive_growth(
-                    G, name, metric_choice, buff_size=buff_size,
-                    local_proj=local_proj, override_naming=False,
-                    built=True, keep_connected=True, profiling=True,
+                    G, name, metric_choice, local_proj,
+                    buff_size=buff_size, override_naming=False,
+                    built=True, keep_connected=False, profiling=True,
                     save_network=True, save_metrics=True)
                 plot.make_image_from_array(f_name, G=None, order=order,
                                            built=True, cmap='Reds')

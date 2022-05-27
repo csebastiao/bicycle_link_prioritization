@@ -148,8 +148,8 @@ def random_growth(
 # TODO: Add relative_directness and coverage at least ? Make it consistent
 # with the subtractive one
 def optimize_additive_growth(
-        G, folder_name, metric_optimized, buff_size = 500, 
-        local_proj = None, override_naming = False, built = True,
+        G, folder_name, metric_optimized, local_proj, buff_size = 500,
+        override_naming = False, built = True,
         keep_connected = True, profiling = True, 
         save_network = True, save_metrics = True):
     """
@@ -167,13 +167,12 @@ def optimize_additive_growth(
     metric_optimized : str
         Name of the metric optimized. Can be directness and 
         relative_coverage.
+    local_proj : str
+        Projected crs of the graph. If None, tries to find it based on the
+        latitude and longitude position of a node in the graph.
     buff_size : float, optional
         Size of the buffer used to measure the coverage.
         The default is 500.
-    local_proj : str, optional
-        Projected crs of the graph. If None, tries to find it based on the
-        latitude and longitude position of a node in the graph.
-        The default is None.
     override_naming : bool, optional
         If True, then the folder_name is the full name and nothing is
         added. The default is False.
@@ -259,11 +258,20 @@ def optimize_additive_growth(
         # Directness
         dm = metrics.get_directness_matrix_networkx(
             G.edge_subgraph(actual_edges))
-        d = metrics.directness_from_matrix(dm)
-        dir_hist = [d]
+        dir_hist = [metrics.directness_from_matrix(dm)]
     else:
-        cov_hist = []
-        dir_hist = []
+        # For now, build longest edge first
+        # TODO: Find what to build first: longest in the most direct ?
+        max_len_edge = max(
+            [[G.edges[edge]['length'], edge] for edge in G.edges])
+        actual_edges.append(tuple(max_len_edge[1]))
+        edgelist.remove(max_len_edge[1])
+        cov_hist = [shapely.ops.transform(
+            project.transform,
+            G.edges[max_len_edge[1]]['geometry']).buffer(buff_size).area]
+        dm = metrics.get_directness_matrix_networkx(
+            G.edge_subgraph(actual_edges))
+        dir_hist = [metrics.directness_from_matrix(dm)]
 
     c_hist = []
     if metric_optimized == 'directness':
@@ -357,8 +365,8 @@ def _make_additive_changes(
 
 
 def optimize_subtractive_growth(
-        G, folder_name, metric_optimized, buff_size = 500, 
-        local_proj = None, override_naming = False, built = True,
+        G, folder_name, metric_optimized, local_proj, buff_size = 500,
+        override_naming = False, built = True,
         keep_connected = True, profiling = True, 
         save_network = True, save_metrics = True):
     """
@@ -377,13 +385,12 @@ def optimize_subtractive_growth(
         Name of the metric optimized. Can be directness,
         relative_directness, coverage, relative_coverage and 
         global_efficiency.
+    local_proj : str
+        Projected crs of the graph. If None, tries to find it based on the
+        latitude and longitude position of a node in the graph.
     buff_size : float, optional
         Size of the buffer used to measure the coverage.
         The default is 500.
-    local_proj : str, optional
-        Projected crs of the graph. If None, tries to find it based on the
-        latitude and longitude position of a node in the graph.
-        The default is None.
     override_naming : bool, optional
         If True, then the folder_name is the full name and nothing is
         added. The default is False.
@@ -456,7 +463,7 @@ def optimize_subtractive_growth(
     # Initiliaze coverage
     geom = dict()
     
-    #TODO: If None, find projected crs with lat and long
+    #TODO: Find automatically local proj ?
     project = pyproj.Transformer.from_proj(
             pyproj.Proj(init=pyproj.CRS('epsg:4326')),
             pyproj.Proj(init=pyproj.CRS(local_proj)))
@@ -1113,7 +1120,7 @@ def relative_coverage_additive_step(
             temp_g[edge] = shapely.ops.transform(
                 project.transform,
                 G.edges[edge]['geometry']).buffer(buff_size)
-            area = shapely.ops.unary_union(temp_g).area
+            area = shapely.ops.unary_union(list(temp_g.values())).area
             batch_m.append((area - bef_area) / G.edges[edge]['length'])
             batch_choice.append(edge)
     # Need to try because sometimes the difference is so small that it 
