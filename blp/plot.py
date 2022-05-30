@@ -12,7 +12,7 @@ import networkx as nx
 import osmnx as ox
 from blp import utils
 
-
+# TODO: Make possibility to show both metrics for hysteresis instead of one
 def plot_hysteresis(
         additive_history, subtractive_history, metric_name = None,
         normalize_x = True, normalize_y = False):
@@ -78,6 +78,8 @@ def plot_coverage_directness(
     elif optimized in ['directness', 'relative_directness',
                        'global_efficiency']:
         colors = ['b', 'r']
+    elif optimized == 'random':
+        colors = ['b', '']
     else:
         colors = ['b', 'b']
         print("No valid optimized value as input, same color for both plot.")

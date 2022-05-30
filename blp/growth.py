@@ -10,6 +10,7 @@ import io
 import tqdm
 import pickle
 import numpy as np
+import random
 import networkx as nx
 import pyproj
 import shapely
@@ -17,16 +18,63 @@ from blp import metrics
 from blp import utils
 
 
-# TODO : Works with a built component and keeping connected,
-# need to try with multiple built component or no built part, with and
-# without enforcing connectedness, for every metrics
-
-
-# TODO : Find why to choose randomly 2 edges, np.random.choice need 1D
 def random_growth(
-        G, folder_name, order, buff_size = 0.002,
+        G, folder_name, order, local_proj, buff_size = 500,
         override_naming = False, built = True,
         keep_connected = True, save_network = True, save_metrics = True):
+    """
+    Create the growth of a network G in a random manner, adding or 
+    subtracting edges one by one randomly.
+
+    Parameters
+    ----------
+    G : networkx.classes.graph.Graph
+        Final network.
+    folder_name : str
+        Name of the folder. If override_naming is True, then full name
+        of the folder, otherwise standardized suffixe are added based on
+        the options of the functions.
+    order : str
+         Order of the random growth, can be either additive or subtractive.
+    local_proj : str
+        Projected crs of the graph. If None, tries to find it based on the
+        latitude and longitude position of a node in the graph.
+    buff_size : float, optional
+        Size of the buffer used to measure the coverage.
+        The default is 500.
+    override_naming : bool, optional
+        If True, then the folder_name is the full name and nothing is
+        added. The default is False.
+    built : bool, optional
+        If True, make a difference between the built part of the network
+        and the planned part. The default is True.
+    keep_connected : bool, optional
+        If True, the number of components of the graph can never exceed 1
+        if there is not a built network, or the number of components
+        of the built network. The default is True.
+    save_network : bool, optional
+        If True, save G as final_network.gpickle in the result's folder.
+        The default is True.
+    save_metrics : bool, optional
+        If True, save the metrics coverage and directness as arrays
+        in the result's folder, under the name
+        arrcov.pickle and arrdir.pickle.
+        The default is True.
+
+    Raises
+    ------
+    ValueError
+        Raised if the value of the input order is not a 
+        possible value. metric_optimized can be additive or subtractive.
+
+
+    Returns
+    -------
+    folder_name : str
+        Final name of the folder where the results are stored. If 
+        override_naming is true, same as the input folder_name.
+
+    """
     if order not in ['subtractive', 'additive']:
         raise ValueError("""
                          Value of the order is not valid, please put
@@ -38,10 +86,10 @@ def random_growth(
         if keep_connected is True:
             folder_name += "_connected"
         if order == 'subtractive':
-            folder_name += "_subtractive_random"
+            folder_name += f"_subtractive_bf{buff_size}_random"
         # Could just use else but allows to be clearer
         elif order == 'additive':
-            folder_name += "_additive_random"
+            folder_name += f"_additive_bf{buff_size}_random"
     # Make a new folder with the name where every results will be stored
     if not os.path.exists(folder_name):
         os.makedirs(folder_name)
@@ -54,13 +102,28 @@ def random_growth(
     if built is True:
         edgelist = [edge for edge in G.edges 
                     if G.edges[edge]['built'] == 0]
-        if order == 'additive':
+        if order == 'additive': # init for the subgraph
             actual_edges = [edge for edge in G.edges
                             if G.edges[edge]['built'] == 1]
     else:
         edgelist = [edge for edge in G.edges]
-        if order == 'additive':
-            actual_edges = []
+        if order == 'additive': # init for the subgraph
+            choice = random.choice(edgelist)
+            actual_edges = [choice] # need to be non-empty, first random
+            edgelist.remove(choice) # choice made here
+    # Coverage
+    geom = dict()
+    project = pyproj.Transformer.from_proj(
+            pyproj.Proj(init=pyproj.CRS('epsg:4326')),
+            pyproj.Proj(init=pyproj.CRS(local_proj)))
+    if order == 'additive':
+        for edge in actual_edges:
+            geom[edge] = shapely.ops.transform(
+                project.transform, G.edges[edge]['geometry']).buffer(buff_size)
+    else:
+        for edge in G.edges:
+            geom[edge] = shapely.ops.transform(
+                project.transform, G.edges[edge]['geometry']).buffer(buff_size)
     if keep_connected is True:
         if order == 'subtractive':
             for i in tqdm.tqdm(range(len(edgelist))):
@@ -68,6 +131,7 @@ def random_growth(
                 for edge in edgelist:
                     H = G.copy()
                     H.remove_edge(*edge)
+                    # See directness_subtractive_step comment on this
                     if (nx.number_connected_components(H)
                         > nx.number_connected_components(G)) and (
                             len(sorted(
@@ -75,14 +139,14 @@ def random_growth(
                         pass
                     else:
                         edge_batch.append(edge)
-                choice = np.random.choice(edge_batch)
+                choice = random.choice(edge_batch) # random choice
                 G.remove_edge(*choice)
                 edgelist.remove(choice)
                 G = utils.clean_isolated_node(G)
                 c_hist.append(choice)
-                geom = [G.edges[edge]['geometry'].buffer(buff_size)
-                        for edge in G.edges]
-                cov_hist.append(shapely.ops.unary_union(geom).area)
+                geom.pop(choice)
+                cov_hist.append(shapely.ops.unary_union(
+                    list(geom.values())).area)
                 dir_hist.append(metrics.directness_from_matrix(
                     metrics.get_directness_matrix_networkx(G)))
         elif order == 'additive':
@@ -101,38 +165,42 @@ def random_growth(
                         pass
                     else:
                         edge_batch.append(edge)
-                choice = np.random.choice(edge_batch)
+                choice = random.choice(edge_batch) # random choice
                 edgelist.remove(choice)
                 actual_edges.append(choice)
                 c_hist.append(choice)
-                geom = [G.edges[edge]['geometry'].buffer(buff_size)
-                        for edge in actual_edges]
-                cov_hist.append(shapely.ops.unary_union(geom).area)
+                geom[choice] = shapely.ops.transform(
+                    project.transform, G.edges[choice]['geometry']
+                    ).buffer(buff_size)
+                cov_hist.append(shapely.ops.unary_union(
+                    list(geom.values())).area)
                 dir_hist.append(metrics.directness_from_matrix(
                     metrics.get_directness_matrix_networkx(
                         G.edge_subgraph(actual_edges))))
     else:
         if order == 'subtractive':
             for i in tqdm.tqdm(range(len(edgelist))):
-                choice = np.random.choice(edgelist)
+                choice = random.choice(edgelist) # random choice
                 G.remove_edge(*choice)
                 edgelist.remove(choice)
                 G = utils.clean_isolated_node(G)
                 c_hist.append(choice)
-                geom = [G.edges[edge]['geometry'].buffer(buff_size)
-                        for edge in G.edges]
-                cov_hist.append(shapely.ops.unary_union(geom).area)
+                geom.pop(choice)
+                cov_hist.append(shapely.ops.unary_union(
+                    list(geom.values())).area)
                 dir_hist.append(metrics.directness_from_matrix(
                     metrics.get_directness_matrix_networkx(G)))
         elif order == 'additive':
             for i in tqdm.tqdm(range(len(edgelist))):
-                choice = np.random.choice(edgelist)
+                choice = random.choice(edgelist) # random choice
                 edgelist.remove(choice)
                 actual_edges.append(choice)
                 c_hist.append(choice)
-                geom = [G.edges[edge]['geometry'].buffer(buff_size)
-                        for edge in actual_edges]
-                cov_hist.append(shapely.ops.unary_union(geom).area)
+                geom[choice] = shapely.ops.transform(
+                    project.transform, G.edges[choice]['geometry']
+                    ).buffer(buff_size)
+                cov_hist.append(shapely.ops.unary_union(
+                    list(geom.values())).area)
                 dir_hist.append(metrics.directness_from_matrix(
                     metrics.get_directness_matrix_networkx(
                         G.edge_subgraph(actual_edges))))
