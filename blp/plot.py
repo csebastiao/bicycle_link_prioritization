@@ -12,34 +12,119 @@ import networkx as nx
 import osmnx as ox
 from blp import utils
 
-# TODO: Make possibility to show both metrics for hysteresis instead of one
+
 def plot_hysteresis(
-        additive_history, subtractive_history, metric_name = None,
-        normalize_x = True, normalize_y = False):
-    with open(additive_history, "rb") as fp:
-        add_val = pickle.load(fp)
-    with open(subtractive_history, "rb") as fp:
-        sub_val = pickle.load(fp)
-    sub_val.reverse()
-    fig = plt.figure(figsize=(18, 9))
-    ax = fig.add_subplot(1, 1, 1)
-    ax.plot(range(len(add_val)), add_val, color='b', label='additive')
-    ax.plot(range(len(sub_val)), sub_val, color='r', label='subtractive')
-    auc = (utils.get_area_under_curve(
-        sub_val, normalize_x=normalize_x, normalize_y=normalize_y)
-           - utils.get_area_under_curve(
-               add_val, normalize_x=normalize_x, normalize_y=normalize_y))
-    ax.set_xlabel("Step")
-    if metric_name is None:
-        ax.set_ylabel("Metric value")
+        add_folder, sub_folder, show_metric = 'both', description = None):
+    """
+    Create a plot of the hysteresis of directness, coverage or both
+    metrics where the additive growth is in blue and the subtractive
+    in red.
+
+    Parameters
+    ----------
+    add_folder : str
+        Path to the folder with the additive growth.
+    sub_folder : str
+        Path to the folder with the subtractive growth.
+    show_metric : str, optional
+        Metric shown, either both, directness or coverage.
+        The default is 'both'.
+    description : str, optional
+        Added description as the title of the figure.
+        The default is None.
+
+    Raises
+    ------
+    ValueError
+        Raised if an invalid value is used as an input for show_metric.
+        Valid values are both, directness and coverage.
+
+    """
+    if show_metric not in ['both', 'directness', 'coverage']:
+        raise ValueError("""
+                         Invalid value for show_metric input, please put
+                         both, directness or coverage.
+                         """)
+    if show_metric in ['directness', 'coverage']:
+        if show_metric == 'directness':
+            normalize_x = True
+            normalize_y = False
+            with open(add_folder + '/arrdir.pickle', "rb") as fp:
+                add_val = pickle.load(fp)
+            with open(sub_folder + '/arrdir.pickle', "rb") as fp:
+                sub_val = pickle.load(fp)
+        elif show_metric == 'coverage':
+            normalize_x = True
+            normalize_y = True
+            with open(add_folder + '/arrcov.pickle', "rb") as fp:
+                add_val = pickle.load(fp)
+            with open(sub_folder + '/arrcov.pickle', "rb") as fp:
+                sub_val = pickle.load(fp)
+        sub_val.reverse()
+        fig = plt.figure(figsize=(18, 9))
+        ax = fig.add_subplot(1, 1, 1)
+        ax.plot(range(len(add_val)), add_val, color='b', label='additive')
+        ax.plot(range(len(sub_val)), sub_val, color='r', label='subtractive')
+        # Measure difference in area under curve between sub and add
+        auc = (utils.get_area_under_curve(
+            sub_val, normalize_x=normalize_x, normalize_y=normalize_y)
+               - utils.get_area_under_curve(
+                   add_val, normalize_x=normalize_x, normalize_y=normalize_y))
+        ax.set_xlabel("Step")
+        ax.set_ylabel(show_metric)
+        ax.set_title(f"""
+                     AUC difference between subtractive and 
+                     additive: {round(auc, 6)}, normalize_x is 
+                     {normalize_x} and normalize_y is {normalize_y}.
+                     """)
+        ax.legend()
     else:
-        ax.set_ylabel(metric_name)
-    ax.set_title(f"""
-                 AUC difference between subtractive and 
-                 additive: {round(auc, 6)}, normalize_x is 
-                 {normalize_x} and normalize_y is {normalize_y}.
-                 """)
-    ax.legend()
+        with open(add_folder + '/arrdir.pickle', "rb") as fp:
+            add_dir = pickle.load(fp)
+        with open(sub_folder + '/arrdir.pickle', "rb") as fp:
+            sub_dir = pickle.load(fp)
+        sub_dir.reverse()
+        with open(add_folder + '/arrcov.pickle', "rb") as fp:
+            add_cov = pickle.load(fp)
+        with open(sub_folder + '/arrcov.pickle', "rb") as fp:
+            sub_cov = pickle.load(fp)
+        sub_cov.reverse()
+        # Put ax instead of axs to return same thing in every cases
+        fig, ax = plt.subplots(1, 2, figsize=(24, 12))
+        ax[0].set_xlabel("Step")
+        ax[0].set_ylabel("Coverage")
+        ax[1].set_xlabel("Step")
+        ax[1].set_ylabel("Directness")
+        ax[0].plot(
+            range(len(add_cov)), add_cov, color = 'b', label='additive')
+        ax[0].plot(
+            range(len(sub_cov)), sub_cov, color = 'r', label='subtractive')
+        ax[1].plot(
+            range(len(add_dir)), add_dir, color = 'b', label='additive')
+        ax[1].plot(
+            range(len(sub_dir)), sub_dir, color = 'r', label='subtractive')
+        auc_cov = (utils.get_area_under_curve(
+            sub_cov, normalize_x=True, normalize_y=True)
+            - utils.get_area_under_curve(
+                add_cov, normalize_x=True, normalize_y=True))
+        ax[0].set_title(f"""
+                     AUC difference between subtractive and 
+                     additive: {round(auc_cov, 6)}, normalize_x is 
+                     True and normalize_y is True.
+                     """)
+        auc_dir = (utils.get_area_under_curve(
+            sub_dir, normalize_x=True, normalize_y=False)
+            - utils.get_area_under_curve(
+                add_dir, normalize_x=True, normalize_y=False))
+        ax[1].set_title(f"""
+                     AUC difference between subtractive and 
+                     additive: {round(auc_dir, 6)}, normalize_x is 
+                     True and normalize_y is False.
+                     """)
+        if description is not None:
+            fig.suptitle(description)
+        ax[0].legend()
+        ax[1].legend()
     return fig, ax
 
 
@@ -79,7 +164,7 @@ def plot_coverage_directness(
                        'global_efficiency']:
         colors = ['b', 'r']
     elif optimized == 'random':
-        colors = ['b', '']
+        colors = ['b', 'b']
     else:
         colors = ['b', 'b']
         print("No valid optimized value as input, same color for both plot.")
@@ -170,7 +255,7 @@ def make_image_from_array(
             xlim = ax.get_xlim() # keep same size of image for video
             ylim = ax.get_ylim()
             bb = [ylim[1], ylim[0], xlim[1], xlim[0]]
-            for idx, edge in enumerate(choice_history[:-1]):
+            for idx, edge in enumerate(choice_history):
                 G.remove_edge(*edge)
                 G = utils.clean_isolated_node(G) # remove node without edge
                 fig, ax = ox.plot_graph(
@@ -277,7 +362,8 @@ def make_video_from_image(img_folder_name, reverse = False,
             video_name = video_name + "_reverse.mp4"
         else:
             video_name = video_name + ".mp4"
-    images = [img for img in os.listdir(img_folder_name) if img.endswith(".png")]
+    images = [img for img in os.listdir(img_folder_name)
+              if img.endswith(".png")]
     if reverse is True: # reverse order of the images
         images.reverse() 
     # dimensions between images need to be constant
@@ -289,6 +375,138 @@ def make_video_from_image(img_folder_name, reverse = False,
         video.write(cv2.imread(os.path.join(img_folder_name, image)))
     cv2.destroyAllWindows()
     video.release()
+
+
+# TODO: Finish to make side by side evolution of network and metrics
+# Careful ox.plot_graph don't work with subplot for some reason
+# TODO: Make possibility to put either number of step or
+# number of kilometers constructed, show it as a title or something ?
+def make_evolution_from_array(
+        folder_name, G = None, order = 'subtractive',
+        built = False, cmap = 'Reds'):
+    """
+    Make a folder with images for every step of the growth of the
+    graph from an array of the choice of the edge removed/added with 
+    the subtractive/additive growth.
+
+    Parameters
+    ----------
+    folder_name : str
+        Name of the folder for the images.
+    G : networkx.classes.graph.Graph, optional
+        Final network. If None, read a gpickle file based on 
+        folder_name. The default is None.
+    order : str, optional
+        Order of the history, either subtractive or additive.
+        The default is 'subtractive'.
+    built : bool, optional
+        If True, find and color differently the already built network
+        that is fixed and the planned network. The default is False.
+    cmap : str, optional
+        Name of the colormap used. The default is 'Reds'.
+
+    Raises
+    ------
+    ValueError
+        Raised if the order value is not valid.
+
+    """
+    if G is None: # name by default of the gpickle file with the graph
+        G = nx.read_gpickle(folder_name + "/final_network.gpickle")
+    PAD = len(str(len(G))) # number of 0 to pad to order images
+    with open(folder_name + "/arrchoice.pickle", "rb") as fp:
+        choice_history = pickle.load(fp)
+    img_folder_name = folder_name + "/network_evolution"
+    if not os.path.exists(img_folder_name):
+        os.makedirs(img_folder_name)
+    if order == 'subtractive':
+        if built is False:
+            fig, axs = plt.subplot(1, 3, figsize=(24, 12))
+            ox.plot_graph(  #this allow to save every step as a png
+                nx.MultiDiGraph(G), ax=axs[0], bgcolor='black',
+                node_color='w', edge_color='w')
+            xlim = axs[0].get_xlim() # keep same size of image for video
+            ylim = axs[0].get_ylim()
+            bb = [ylim[1], ylim[0], xlim[1], xlim[0]]
+            plt.savefig(fig, img_folder_name + f"/image_{0:0{PAD}}.png")
+            for idx, edge in enumerate(choice_history[:-1]):
+                G.remove_edge(*edge)
+                G = utils.clean_isolated_node(G) # remove node without edge
+                fig, ax = ox.plot_graph(
+                    nx.MultiDiGraph(G), bbox=bb,
+                    filepath=img_folder_name + f"/image_{idx+1:0{PAD}}.png",
+                    save=True, show=False, close=True)
+        else:
+            c = mpl.cm.get_cmap(cmap) # color to see built and planned
+            built_color = c(1.0) # color of the built part
+            ec = ox.plot.get_edge_colors_by_attr(nx.MultiDiGraph(G),
+                                                 'built', cmap = cmap)
+            fig, ax = ox.plot_graph(  #this allow to save every step as a png
+                nx.MultiDiGraph(G), edge_color=ec,
+                filepath=img_folder_name + f"/image_{0:0{PAD}}.png",
+                save=True, show=False, close=True)
+            xlim = ax.get_xlim() # keep same size of image for video
+            ylim = ax.get_ylim()
+            bb = [ylim[1], ylim[0], xlim[1], xlim[0]]
+            for idx, edge in enumerate(choice_history[:-1]):
+                G.remove_edge(*edge)
+                G = utils.clean_isolated_node(G) # remove node without edge
+                ec = ox.plot.get_edge_colors_by_attr(nx.MultiDiGraph(G),
+                                                     'built', cmap = cmap)
+                fig, ax = ox.plot_graph(
+                    nx.MultiDiGraph(G), bbox=bb, edge_color=ec,
+                    filepath=img_folder_name + f"/image_{idx+1:0{PAD}}.png",
+                    save=True, show=False, close=True)
+            # when every planned edge removed, we can't use the function
+            # to find the right color, so need to put it manually
+            G.remove_edge(*choice_history[-1])
+            G = utils.clean_isolated_node(G) # remove node without edge
+            fig, ax = ox.plot_graph(
+                nx.MultiDiGraph(G), bbox=bb, edge_color=built_color,
+                filepath=img_folder_name + f"/image_{idx+2:0{PAD}}.png",
+                save=True, show=False, close=True)
+    elif order == 'additive':
+        fig, ax = ox.plot_graph(  #this allow to have the good bounding box
+            nx.MultiDiGraph(G), show=False, close=True)
+        xlim = ax.get_xlim() # keep same size of image for video
+        ylim = ax.get_ylim()
+        bb = [ylim[1], ylim[0], xlim[1], xlim[0]]
+        if built is False:
+            actual_edges = []
+            for idx, edge in enumerate(choice_history):
+                actual_edges.append(edge)
+                ec = ox.plot.get_edge_colors_by_attr(
+                    nx.MultiDiGraph(G.edge_subgraph(actual_edges)),
+                    'built', cmap = cmap)
+                fig, ax = ox.plot_graph(
+                    nx.MultiDiGraph(G.edge_subgraph(actual_edges)), bbox=bb,
+                    filepath=img_folder_name + f"/image_{idx:0{PAD}}.png",
+                    save=True, show=False, close=True)
+        else:
+            actual_edges = [
+                edge for edge in G.edges if edge not in choice_history]
+            c = mpl.cm.get_cmap(cmap)
+            built_color = c(1.0)
+            fig, ax = ox.plot_graph(  #this allow to save every step as a png
+                nx.MultiDiGraph(G.edge_subgraph(actual_edges)),
+                edge_color=built_color,  bbox=bb,
+                filepath=img_folder_name + f"/image_{0:0{PAD}}.png",
+                save=True, show=False, close=True)
+            for idx, edge in enumerate(choice_history):
+                actual_edges.append(edge)
+                ec = ox.plot.get_edge_colors_by_attr(
+                    nx.MultiDiGraph(G.edge_subgraph(actual_edges)),
+                    'built', cmap = cmap)
+                fig, ax = ox.plot_graph(
+                    nx.MultiDiGraph(G.edge_subgraph(actual_edges)),
+                    bbox=bb, edge_color=ec,
+                    filepath=img_folder_name + f"/image_{idx+1:0{PAD}}.png",
+                    save=True, show=False, close=True)
+    else:
+        raise ValueError("""
+                         Incorrect value for the order attribute, please
+                         put subtractive or additive.
+                         """)
 
 
 # TODO: Before polishing, be sure what we want to do exactly

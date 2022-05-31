@@ -51,33 +51,25 @@ if __name__ == "__main__":
     poly
 
     name = f"../data/s{RAD}_copenhagen"
-    metric_list = ['relative_coverage', 'directness']
-    orders = ['additive', 'subtractive']
+    built = True
+    connected = False
+    orders = ['subtractive', 'additive']
     for order in orders:
-        for metric_choice in metric_list:
-            if order == 'additive':
-                f_name = growth.optimize_additive_growth(
-                    G, name, metric_choice, local_proj,
-                    buff_size=buff_size, override_naming=False,
-                    built=True, keep_connected=False, profiling=True,
-                    save_network=True, save_metrics=True)
-                plot.make_image_from_array(f_name, G=None, order=order,
-                                           built=True, cmap='Reds')
-                plot.make_video_from_image(f_name + "/network_images",
-                                           reverse=False, video_name=None,
-                                           fps=5)
-            elif order == 'subtractive':
-                f_name = growth.optimize_subtractive_growth(
-                    G, name, metric_choice, local_proj,
-                    buff_size=buff_size, override_naming=False,
-                    built=True, keep_connected=False, profiling=True,
-                    save_network=True, save_metrics=True)
-                plot.make_image_from_array(f_name, G=None, order=order,
-                                           built=True, cmap='Reds')
-                plot.make_video_from_image(f_name + "/network_images",
-                                           reverse=True, video_name=None,
-                                           fps=5)
-            plot.plot_coverage_directness(f_name,
-                                          optimized=metric_choice, 
-                                          coverage_name=None,
-                                          directness_name=None, save=True)
+        f_name = growth.random_growth(
+            G, name, order, local_proj, buff_size=buff_size,
+            override_naming=False, built=built, keep_connected=connected,
+            save_network=True, save_metrics=True)
+        plot.make_image_from_array(f_name, G=None, order=order,
+                                   built=built, cmap='Reds')
+        if order == 'additive':
+            plot.make_video_from_image(f_name + "/network_images",
+                                       reverse=False, video_name=None,
+                                       fps=5)
+        elif order == 'subtractive':
+            plot.make_video_from_image(f_name + "/network_images",
+                                       reverse=True, video_name=None,
+                                       fps=5)
+        plot.plot_coverage_directness(f_name,
+                                      optimized='random', 
+                                      coverage_name=None,
+                                      directness_name=None, save=True)

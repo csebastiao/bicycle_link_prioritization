@@ -198,6 +198,9 @@ def directness_from_matrix(mat):
         Linkwise directness of the graph corresponding to mat.
 
     """
+    if np.count_nonzero(mat) == 0:
+        print("Issue here:", mat)
+        return 0
     return np.sum(mat)/np.count_nonzero(mat)
 
 
