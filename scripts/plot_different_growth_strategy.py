@@ -8,13 +8,12 @@ import pickle
 
 
 if __name__ == "__main__":
-    f1 = '../data/s2000_copenhagen_additive_bf200_relative_coverage'
-    f2 = '../data/s2000_copenhagen_additive_bf200_random'
-    f3 = '../data/s2000_copenhagen_additive_bf200_betweenness'
-    f4 = '../data/s2000_copenhagen_subtractive_bf200_relative_coverage'
-    f5 = '../data/s2000_copenhagen_subtractive_bf200_random'
-    f6 = '../data/s2000_copenhagen_subtractive_bf200_betweenness'
-    f_list = [f1, f2, f3, f4, f5, f6]
+    f_list = ['../data/s2000_copenhagen_additive_bf200_relative_coverage',
+              '../data/s2000_copenhagen_additive_bf200_random',
+              '../data/s2000_copenhagen_additive_bf200_betweenness',
+              '../data/s2000_copenhagen_subtractive_bf200_relative_coverage',
+              '../data/s2000_copenhagen_subtractive_bf200_random',
+              '../data/s2000_copenhagen_subtractive_bf200_betweenness']
     coverage_list = []
     directness_list = []
     for folder_name in f_list:
@@ -28,6 +27,10 @@ if __name__ == "__main__":
     directness_list[4].reverse()
     coverage_list[5].reverse()
     directness_list[5].reverse()
+    for vlist in coverage_list:
+        print(len(vlist), vlist[0], vlist[-1])
+    for vlist in directness_list:
+        print(len(vlist), vlist[0], vlist[-1])
     # fig, axs = plt.subplots(1, 2, figsize=(20, 10))
     # axs[0].set_xlabel("Step")
     # axs[0].set_ylabel("Coverage")
@@ -35,9 +38,9 @@ if __name__ == "__main__":
     # axs[1].set_ylabel("Linkwise directness")
     
     # axs[0].plot(range(len(coverage_list[0])), coverage_list[0],
-    #             linewidth=5, label='Additive, Relative coverage')
+    #             linewidth=5, label='Additive, Directness')
     # axs[1].plot(range(len(directness_list[0])), directness_list[0],
-    #             linewidth=5, label='Additive, Relative coverage')
+    #             linewidth=5, label='Additive, Directness')
     # axs[0].plot(range(len(coverage_list[1])), coverage_list[1],
     #             linewidth=5, label='Additive, Random')
     # axs[1].plot(range(len(directness_list[1])), directness_list[1],
@@ -47,9 +50,9 @@ if __name__ == "__main__":
     # axs[1].plot(range(len(directness_list[2])), directness_list[2],
     #             linewidth=5, label='Additive, Betweenness')
     # axs[0].plot(range(len(coverage_list[3])), coverage_list[3],
-    #             linewidth=5, label='Subtractive, Relative coverage')
+    #             linewidth=5, label='Subtractive, Directness')
     # axs[1].plot(range(len(directness_list[3])), directness_list[3],
-    #             linewidth=5, label='Subtractive, Relative coverage')
+    #             linewidth=5, label='Subtractive, Directness')
     # axs[0].plot(range(len(coverage_list[4])), coverage_list[4],
     #             linewidth=5, label='Subtractive, Random')
     # axs[1].plot(range(len(directness_list[4])), directness_list[4],
@@ -61,5 +64,5 @@ if __name__ == "__main__":
     
     # axs[0].legend()
     # axs[1].legend()
-    # fig.suptitle('s2000 Copenhagen, bf200')
+    # fig.suptitle('s2000 Copenhagen, bf200, connected')
     # plt.tight_layout()

@@ -104,7 +104,6 @@ def optimize_additive_growth(
         os.makedirs(folder_name)
     if save_network is True:
         nx.write_gpickle(G, folder_name + "/final_network.gpickle")
-
     G = G.copy() # Create a copy to not mutate input
     if built is True:
         actual_edges = [edge for edge in G.edges 
@@ -114,7 +113,7 @@ def optimize_additive_growth(
     else:
         actual_edges = []
         edgelist = [edge for edge in G.edges]
-    
+    c_hist = []
     # Coverage
     geom = dict()
     project = pyproj.Transformer.from_proj(
@@ -123,8 +122,6 @@ def optimize_additive_growth(
     for edge in actual_edges:
         geom[edge] = shapely.ops.transform(
             project.transform, G.edges[edge]['geometry']).buffer(buff_size)
-    
-    
     if built is True:
         bef_area = shapely.ops.unary_union(list(geom.values())).area
         cov_hist = [bef_area]
@@ -134,23 +131,25 @@ def optimize_additive_growth(
         dir_hist = [metrics.directness_from_matrix(dm)]
     else:
         # For now, build longest edge first
-        # TODO: Find what to build first: longest in the most direct ?
+        # TODO: Build first based on metric optimized ? 
         max_len_edge = max(
             [[G.edges[edge]['length'], edge] for edge in G.edges])
         actual_edges.append(tuple(max_len_edge[1]))
         edgelist.remove(max_len_edge[1])
+        c_hist.append(max_len_edge[1])
+        geom[max_len_edge[1]] = shapely.ops.transform(
+            project.transform,
+            G.edges[max_len_edge[1]]['geometry']).buffer(buff_size)
         cov_hist = [shapely.ops.transform(
             project.transform,
             G.edges[max_len_edge[1]]['geometry']).buffer(buff_size).area]
         dm = metrics.get_directness_matrix_networkx(
             G.edge_subgraph(actual_edges))
         dir_hist = [metrics.directness_from_matrix(dm)]
-
-    c_hist = []
     if metric_optimized == 'directness':
         for i in tqdm.tqdm(range(len(edgelist))):
             new_m, choice = directness_additive_step(
-                G, actual_edges, edgelist, keep_connected = keep_connected)
+                G, actual_edges, edgelist, keep_connected=keep_connected)
             actual_edges, edgelist, geom, c_hist, cov_hist, dir_hist = (
                 _make_additive_changes(
                     G, choice, buff_size, project, actual_edges, edgelist,
@@ -159,7 +158,7 @@ def optimize_additive_growth(
         for i in tqdm.tqdm(range(len(edgelist))):
             new_m, choice = relative_coverage_additive_step(
                 G, buff_size, project, actual_edges, edgelist,
-                cov_hist[-1], geom, keep_connected = keep_connected)
+                cov_hist[-1], geom, keep_connected=keep_connected)
             actual_edges, edgelist, geom, c_hist, cov_hist, dir_hist = (
                 _make_additive_changes(
                     G, choice, buff_size, project, actual_edges, edgelist,
@@ -223,13 +222,11 @@ def _make_additive_changes(
     c_hist.append(choice)
     actual_edges.append(tuple(choice))
     edgelist.remove(choice)
-    
     # Coverage
     geom[choice] = shapely.ops.transform(
         project.transform, G.edges[choice]['geometry']).buffer(buff_size)
     bef_area = shapely.ops.unary_union(list(geom.values())).area
     cov_hist.append(bef_area)
-    
     # Directness
     dir_hist.append(metrics.directness_from_matrix(
         metrics.get_directness_matrix_networkx(
@@ -332,10 +329,8 @@ def optimize_subtractive_growth(
                     if G.edges[edge]['built'] == 0]
     else:
         edgelist = [edge for edge in G.edges]
-
-    # Initiliaze coverage
+    # Coverage
     geom = dict()
-    
     #TODO: Find automatically local proj ?
     project = pyproj.Transformer.from_proj(
             pyproj.Proj(init=pyproj.CRS('epsg:4326')),
@@ -346,14 +341,12 @@ def optimize_subtractive_growth(
             G.edges[edge]['geometry']).buffer(buff_size)
     bef_area = shapely.ops.unary_union(list(geom.values())).area
     cov_hist = [bef_area]
-
-    # Initiliaze directness
+    # Directness
     sm = metrics.get_shortest_network_path_matrix(G)
     em = metrics.get_euclidean_distance_matrix(G)
     dm = metrics.avoid_zerodiv_matrix(em, sm)
     d = metrics.directness_from_matrix(dm)
     dir_hist = [d]
-
     c_hist = []
     # Optimize based on metric_optimized. First we find the edge to remove
     # that is optimizing the metric that we want, then we make the changes
@@ -363,7 +356,7 @@ def optimize_subtractive_growth(
     else:
         n_iter = range(len(edgelist) - 1)
     if metric_optimized == 'directness':
-        for i in tqdm.tqdm():
+        for i in tqdm.tqdm(n_iter):
             new_m, choice = directness_subtractive_step(
                 G, edgelist, em, keep_connected=keep_connected)
             edgelist, em, sm, geom, c_hist, dir_hist, cov_hist = (
@@ -397,7 +390,6 @@ def optimize_subtractive_growth(
             edgelist, em, sm, geom, c_hist, dir_hist, cov_hist = (
                 _make_subtractive_changes(G, choice, edgelist, em, sm, geom,
                                           c_hist, dir_hist, cov_hist))
-    
     # Save directness, coverage and choice of edge as pickle file
     if save_metrics is True:
         with open(folder_name + "/arrdir.pickle", "wb") as fp:
@@ -462,12 +454,10 @@ def _make_subtractive_changes(
         sm = np.delete(sm, node_index[n], 0) # delete row
         sm = np.delete(sm, node_index[n], 1) # delete column
         G.remove_node(n) # remove the isolated node
-
     # Directness
     dir_hist.append(metrics.directness_from_matrix(
         metrics.avoid_zerodiv_matrix(
             em, metrics.get_shortest_network_path_matrix(G))))
-
     # Coverage
     geom.pop(choice)
     bef_area = shapely.ops.unary_union(list(geom.values())).area
@@ -1062,7 +1052,7 @@ def random_growth(
     ------
     ValueError
         Raised if the value of the input order is not a 
-        possible value. metric_optimized can be additive or subtractive.
+        possible value. order can be additive or subtractive.
 
 
     Returns
@@ -1139,9 +1129,9 @@ def random_growth(
             list(geom.values())).area)
         dir_hist.append(metrics.directness_from_matrix(
             metrics.get_directness_matrix_networkx(G)))
-    if built is True:
+    if built is True: # if something is built we can remove every other edges
         n_sub_iter = range(len(edgelist))
-    else:
+    else: # else we need to keep the last one
         n_sub_iter = range(len(edgelist) - 1)
     if keep_connected is True:
         if order == 'subtractive':
@@ -1237,6 +1227,61 @@ def betweenness_growth(
         G, folder_name, order, local_proj, buff_size = 500,
         override_naming = False, built = True,
         keep_connected = True, save_network = True, save_metrics = True):
+    """
+    Create the growth of a network G with the edges with the highest
+    betweenness constructed first, in a subtractive or additive
+    manner.
+
+    Parameters
+    ----------
+    G : networkx.classes.graph.Graph
+        Final network.
+    folder_name : str
+        Name of the folder. If override_naming is True, then full name
+        of the folder, otherwise standardized suffixe are added based on
+        the options of the functions.
+    order : str
+         Order of the betweenness growth,
+         can be either additive or subtractive.
+    local_proj : str
+        Projected crs of the graph. If None, tries to find it based on the
+        latitude and longitude position of a node in the graph.
+    buff_size : float, optional
+        Size of the buffer used to measure the coverage.
+        The default is 500.
+    override_naming : bool, optional
+        If True, then the folder_name is the full name and nothing is
+        added. The default is False.
+    built : bool, optional
+        If True, make a difference between the built part of the network
+        and the planned part. The default is True.
+    keep_connected : bool, optional
+        If True, the number of components of the graph can never exceed 1
+        if there is not a built network, or the number of components
+        of the built network. The default is True.
+    save_network : bool, optional
+        If True, save G as final_network.gpickle in the result's folder.
+        The default is True.
+    save_metrics : bool, optional
+        If True, save the metrics coverage and directness as arrays
+        in the result's folder, under the name
+        arrcov.pickle and arrdir.pickle.
+        The default is True.
+
+    Raises
+    ------
+    ValueError
+        Raised if the value of the input order is not a 
+        possible value. order can be additive or subtractive.
+
+
+    Returns
+    -------
+    folder_name : str
+        Final name of the folder where the results are stored. If 
+        override_naming is true, same as the input folder_name.
+
+    """
     if order not in ['subtractive', 'additive']:
         raise ValueError("""
                          Value of the order is not valid, please put
@@ -1261,19 +1306,15 @@ def betweenness_growth(
     c_hist = []
     dir_hist = []
     cov_hist = []
-
     # Coverage
     geom = dict()
     project = pyproj.Transformer.from_proj(
             pyproj.Proj(init=pyproj.CRS('epsg:4326')),
             pyproj.Proj(init=pyproj.CRS(local_proj)))
-
     # Find ranking of edge betweenness
     edge_bet = nx.edge_betweenness_centrality(G, weight='length')
-    nx.set_edge_attributes(G, edge_bet, "betweenness")
     sorted_edges = [k for k, v in sorted( # Sort edges by higher betweenness
         edge_bet.items(), key=lambda item: item[1])]
-
     if built is True:
         edgelist = [edge for edge in G.edges 
                     if G.edges[edge]['built'] == 0]
@@ -1294,12 +1335,13 @@ def betweenness_growth(
         edgelist = [edge for edge in G.edges]
         edge_order = [edge for edge in sorted_edges if edge in edgelist]
         if order == 'additive': # init for the subgraph
-            choice = edge_order[0]
+            choice = edge_order[-1]
             actual_edges = [choice] # need to be non-empty, first random
             edge_order.remove(choice)
             geom[choice] = shapely.ops.transform(
                 project.transform, G.edges[choice]['geometry']
                 ).buffer(buff_size)
+            c_hist.append(choice) # first choice for additive
             cov_hist.append(shapely.ops.unary_union(
                 list(geom.values())).area)
             dir_hist.append(metrics.directness_from_matrix(
@@ -1315,9 +1357,15 @@ def betweenness_growth(
             metrics.get_directness_matrix_networkx(G)))
     else:
         edge_order.reverse()
+    if built is True: # if something is built we can remove every other edges
+        sub_n_last = 0
+        sub_removed_edge = edge_order
+    else: # else we need to keep the last one
+        sub_n_last = 1
+        sub_removed_edge = edge_order[:-1]
     if keep_connected is True:
         if order == 'subtractive':
-            while len(edge_order) > 1:
+            while len(edge_order) > sub_n_last:
                 edge = None
                 count = 0
                 while edge is None:
@@ -1372,7 +1420,7 @@ def betweenness_growth(
                         G.edge_subgraph(actual_edges))))
     else:
         if order == 'subtractive':
-            for edge in tqdm.tqdm(edge_order[:-1]):
+            for edge in tqdm.tqdm(sub_removed_edge):
                 G.remove_edge(*edge)
                 G = utils.clean_isolated_node(G)
                 c_hist.append(edge)

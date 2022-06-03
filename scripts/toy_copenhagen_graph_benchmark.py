@@ -55,7 +55,7 @@ if __name__ == "__main__":
     connected = False
     orders = ['subtractive', 'additive']
     for order in orders:
-        f_name = growth.random_growth(
+        f_name = growth.betweenness_growth(
             G, name, order, local_proj, buff_size=buff_size,
             override_naming=False, built=built, keep_connected=connected,
             save_network=True, save_metrics=True)
