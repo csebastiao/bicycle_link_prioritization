@@ -29,10 +29,17 @@ if __name__ == "__main__":
     # Make built subgraph that we can't touch during growth
     # df = ox.graph_to_gdfs(nx.MultiDiGraph(G), nodes=False, edges=True)
     # planned = df.loc[df['built'] == 0]
-    G_built = nx.ego_graph(G, n, radius=RAD/2, distance='length').copy()
+    first_pos = [12.5385, 55.6854]
+    second_pos = [12.5648, 55.6785]
+    first_n = ox.nearest_nodes(G, *first_pos)
+    second_n = ox.nearest_nodes(G, *second_pos)
+    G_first_built = nx.ego_graph(G, first_n, radius=RAD/3,
+                                 distance='length').copy()
+    G_second_built = nx.ego_graph(G, second_n, radius=RAD/3,
+                                  distance='length').copy()
     nx.set_edge_attributes(G, 0, name='built')
     for edge in G.edges:
-        if edge in G_built.edges:
+        if edge in G_first_built.edges or edge in G_second_built.edges:
             G.edges[edge]['built'] = 1
     
     local_proj = 'epsg:25832'
@@ -50,9 +57,9 @@ if __name__ == "__main__":
     poly = shapely.ops.unary_union(list(test_buff.values()))
     poly
 
-    name = f"../data/s{RAD}_copenhagen"
-    metric_list = ['relative_coverage', 'directness']
-    orders = ['subtractive', 'additive']
+    name = f"../data/s{RAD}_copenhagen_multiple"
+    metric_list = ['relative_coverage']
+    orders = ['subtractive']
     list_built = [True]
     list_connected = [True]
     for built in list_built:
