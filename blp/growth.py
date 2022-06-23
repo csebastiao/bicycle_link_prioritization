@@ -19,7 +19,9 @@ from blp import utils
 
 # TODO: Add automatic projected crs with osmnx
 
-
+# TODO: Add bruteforce approach to test if an elected node for every
+# built components is on the components if a new component is added in the
+# case of multiple buit part with the connected constraint
 def optimize_subtractive_growth(
         G, folder_name, metric_optimized, local_proj, buff_size = 500,
         override_naming = False, built = True,
@@ -1055,7 +1057,7 @@ def relative_coverage_additive_step(
         choice = batch_choice[index_max]
     return new_m, choice
 
-
+# TODO : Adapt subtractive connected mulitple built part growth
 def random_growth(
         G, folder_name, order, local_proj, buff_size = 500,
         override_naming = False, built = True,
@@ -1274,6 +1276,7 @@ def random_growth(
     return folder_name
 
 
+# TODO : Adapt subtractive connected mulitple built part growth
 def betweenness_growth(
         G, folder_name, order, local_proj, buff_size = 500,
         override_naming = False, built = True,

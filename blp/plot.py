@@ -202,7 +202,7 @@ def plot_coverage_directness(
 
 def make_image_from_array(
         folder_name, G = None, array_name = None,
-        order = 'subtractive', built = False, cmap = 'Reds'):
+        order = 'subtractive', built = False, cmap = 'coolwarm'):
     """
     Make a folder with images for every step of the growth of the
     graph from an array of the choice of the edge removed/added with 
@@ -246,10 +246,15 @@ def make_image_from_array(
     img_folder_name = folder_name + "/network_images"
     if not os.path.exists(img_folder_name):
         os.makedirs(img_folder_name)
+    c = mpl.cm.get_cmap(cmap) # color to see built and planned
+    built_color = c(1.0) # color of the built part
     if order == 'subtractive':
         if built is False:
             fig, ax = ox.plot_graph(  #this allow to save every step as a png
                 nx.MultiDiGraph(G),
+                bgcolor='white', node_color='black', node_size=20,
+                node_alpha=0.7, edge_color=c(0.0), edge_linewidth=2,
+                edge_alpha=0.5, figsize=(20,12),
                 filepath=img_folder_name + f"/image_{0:0{PAD}}.png",
                 save=True, show=False, close=True)
             xlim = ax.get_xlim() # keep same size of image for video
@@ -260,15 +265,19 @@ def make_image_from_array(
                 G = utils.clean_isolated_node(G) # remove node without edge
                 fig, ax = ox.plot_graph(
                     nx.MultiDiGraph(G), bbox=bb,
+                    bgcolor='white', node_color='black', node_size=20,
+                    node_alpha=0.7, edge_color=c(0.0), edge_linewidth=2,
+                    edge_alpha=0.5, figsize=(20,12),
                     filepath=img_folder_name + f"/image_{idx+1:0{PAD}}.png",
                     save=True, show=False, close=True)
         else:
-            c = mpl.cm.get_cmap(cmap) # color to see built and planned
-            built_color = c(1.0) # color of the built part
             ec = ox.plot.get_edge_colors_by_attr(nx.MultiDiGraph(G),
-                                                 'built', cmap = cmap)
+                                                 'built', cmap=cmap)
             fig, ax = ox.plot_graph(  #this allow to save every step as a png
                 nx.MultiDiGraph(G), edge_color=ec,
+                bgcolor='white', node_color='black', node_size=20,
+                node_alpha=0.7, edge_linewidth=2,
+                edge_alpha=0.5, figsize=(20,12),
                 filepath=img_folder_name + f"/image_{0:0{PAD}}.png",
                 save=True, show=False, close=True)
             xlim = ax.get_xlim() # keep same size of image for video
@@ -278,9 +287,12 @@ def make_image_from_array(
                 G.remove_edge(*edge)
                 G = utils.clean_isolated_node(G) # remove node without edge
                 ec = ox.plot.get_edge_colors_by_attr(nx.MultiDiGraph(G),
-                                                     'built', cmap = cmap)
+                                                     'built', cmap=cmap)
                 fig, ax = ox.plot_graph(
                     nx.MultiDiGraph(G), bbox=bb, edge_color=ec,
+                    bgcolor='white', node_color='black', node_size=20,
+                    node_alpha=0.7, edge_linewidth=2,
+                    edge_alpha=0.5, figsize=(20,12),
                     filepath=img_folder_name + f"/image_{idx+1:0{PAD}}.png",
                     save=True, show=False, close=True)
             # when every planned edge removed, we can't use the function
@@ -289,6 +301,9 @@ def make_image_from_array(
             G = utils.clean_isolated_node(G) # remove node without edge
             fig, ax = ox.plot_graph(
                 nx.MultiDiGraph(G), bbox=bb, edge_color=built_color,
+                bgcolor='white', node_color='black', node_size=20,
+                node_alpha=0.7, edge_linewidth=2,
+                edge_alpha=0.5, figsize=(20,12),
                 filepath=img_folder_name + f"/image_{idx+2:0{PAD}}.png",
                 save=True, show=False, close=True)
     elif order == 'additive':
@@ -306,16 +321,20 @@ def make_image_from_array(
                     'built', cmap = cmap)
                 fig, ax = ox.plot_graph(
                     nx.MultiDiGraph(G.edge_subgraph(actual_edges)), bbox=bb,
+                    bgcolor='white', node_color='black', node_size=20,
+                    node_alpha=0.7, edge_color=c(0.0), edge_linewidth=2,
+                    edge_alpha=0.5, figsize=(20,12),
                     filepath=img_folder_name + f"/image_{idx:0{PAD}}.png",
                     save=True, show=False, close=True)
         else:
             actual_edges = [
                 edge for edge in G.edges if edge not in choice_history]
-            c = mpl.cm.get_cmap(cmap)
-            built_color = c(1.0)
             fig, ax = ox.plot_graph(  #this allow to save every step as a png
                 nx.MultiDiGraph(G.edge_subgraph(actual_edges)),
                 edge_color=built_color,  bbox=bb,
+                bgcolor='white', node_color='black', node_size=20,
+                node_alpha=0.7, edge_linewidth=2,
+                edge_alpha=0.5, figsize=(20,12),
                 filepath=img_folder_name + f"/image_{0:0{PAD}}.png",
                 save=True, show=False, close=True)
             for idx, edge in enumerate(choice_history):
@@ -326,6 +345,9 @@ def make_image_from_array(
                 fig, ax = ox.plot_graph(
                     nx.MultiDiGraph(G.edge_subgraph(actual_edges)),
                     bbox=bb, edge_color=ec,
+                    bgcolor='white', node_color='black', node_size=20,
+                    node_alpha=0.7, edge_linewidth=2,
+                    edge_alpha=0.5, figsize=(20,12),
                     filepath=img_folder_name + f"/image_{idx+1:0{PAD}}.png",
                     save=True, show=False, close=True)
     else:

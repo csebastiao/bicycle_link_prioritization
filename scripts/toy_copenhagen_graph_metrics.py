@@ -34,26 +34,36 @@ if __name__ == "__main__":
     for edge in G.edges:
         if edge in G_built.edges:
             G.edges[edge]['built'] = 1
-    
-    local_proj = 'epsg:25832'
-    buff_size = 200
-    
     import pyproj
     import shapely
+    local_proj = 'epsg:25832'
+    buff_size = 200
     proj = pyproj.Transformer.from_proj(
             pyproj.Proj(init='epsg:4326'),
             pyproj.Proj(local_proj))
-    test_buff = dict()
-    for edge in G.edges:
-        test_buff[edge] = shapely.ops.transform(
-            proj.transform, G.edges[edge]['geometry']).buffer(buff_size)
-    poly = shapely.ops.unary_union(list(test_buff.values()))
-    poly
+    
+    import geopandas as gpd
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots()
+    ax.set_axis_off()
+    buff_size_list = [500, 200, 2]
+    color_list = [0.1, 0.5, 1]
+    color_dict = dict(zip(buff_size_list, color_list))
+    for buff_size in buff_size_list:
+        test_buff = dict()
+        for edge in G.edges:
+            test_buff[edge] = shapely.ops.transform(
+                proj.transform, G.edges[edge]['geometry']).buffer(buff_size)
+        poly = shapely.ops.unary_union(list(test_buff.values()))
+        p = gpd.GeoSeries(poly)
+        p.plot(ax=ax, color='dodgerblue', alpha=color_dict[buff_size])
+
+    
 
     name = f"../data/s{RAD}_copenhagen"
     metric_list = ['relative_coverage', 'directness']
     orders = ['subtractive', 'additive']
-    list_built = [True]
+    list_built = [False]
     list_connected = [True]
     for built in list_built:
         for connected in list_connected:

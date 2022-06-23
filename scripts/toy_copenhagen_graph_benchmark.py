@@ -11,7 +11,7 @@ from blp import growth
 from blp import plot
 import networkx as nx
 import osmnx as ox
-
+import time
 
 if __name__ == "__main__":
     com_G = nx.read_gpickle(
@@ -50,26 +50,16 @@ if __name__ == "__main__":
     poly = shapely.ops.unary_union(list(test_buff.values()))
     poly
 
-    name = f"../data/s{RAD}_copenhagen"
     built = True
-    connected = False
-    orders = ['subtractive', 'additive']
-    for order in orders:
-        f_name = growth.betweenness_growth(
-            G, name, order, local_proj, buff_size=buff_size,
-            override_naming=False, built=built, keep_connected=connected,
-            save_network=True, save_metrics=True)
-        plot.make_image_from_array(f_name, G=None, order=order,
-                                   built=built, cmap='Reds')
-        if order == 'additive':
-            plot.make_video_from_image(f_name + "/network_images",
-                                       reverse=False, video_name=None,
-                                       fps=5)
-        elif order == 'subtractive':
-            plot.make_video_from_image(f_name + "/network_images",
-                                       reverse=True, video_name=None,
-                                       fps=5)
-        plot.plot_coverage_directness(f_name,
-                                      optimized='random', 
-                                      coverage_name=None,
-                                      directness_name=None, save=True)
+    connected = True
+    order = 'subtractive'
+    name = f"../data/s{RAD}_copenhagen"
+    f_name = growth.betweenness_growth(
+        G, name, order, local_proj, buff_size=buff_size,
+        override_naming=False, built=built, keep_connected=connected,
+        save_network=True, save_metrics=True)
+    plot.make_image_from_array(f_name, G=None, order=order,
+                               built=built, cmap='coolwarm')
+    plot.make_video_from_image(f_name + "/network_images",
+                               reverse=True,
+                               video_name=None, fps=5)
