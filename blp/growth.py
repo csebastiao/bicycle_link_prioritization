@@ -18,10 +18,8 @@ from blp import metrics
 from blp import utils
 
 # TODO: Add automatic projected crs with osmnx
+# TODO: Track length history at every step, add as another metric
 
-# TODO: Add bruteforce approach to test if an elected node for every
-# built components is on the components if a new component is added in the
-# case of multiple buit part with the connected constraint
 def optimize_subtractive_growth(
         G, folder_name, metric_optimized, local_proj, buff_size = 500,
         override_naming = False, built = True,
@@ -143,36 +141,38 @@ def optimize_subtractive_growth(
     else:
         n_iter = range(len(edgelist) - 1)
     if keep_connected is True and built is True:
-        n_comp = nx.number_connected_components(
-            G.edge_subgraph([edge for edge in G.edges 
-                        if G.edges[edge]['built'] == 1]))
+        built_components = list(nx.connected_components(G.edge_subgraph(
+            [edge for edge in G.edges if G.edges[edge]['built'] == 1])))
+        elected_nodes = []
+        for cc in built_components:
+            elected_nodes.append(list(G.subgraph(cc).nodes)[0])
     else:
-        n_comp = 1
+        elected_nodes = None
     if metric_optimized == 'directness':
         for i in tqdm.tqdm(n_iter):
             new_m, choice = directness_subtractive_step(
-                G, edgelist, em, n_comp, keep_connected=keep_connected)
+                G, edgelist, em, elected_nodes, keep_connected=keep_connected)
             edgelist, em, sm, geom, c_hist, dir_hist, cov_hist = (
                 _make_subtractive_changes(G, choice, edgelist, em, sm, geom,
                                           c_hist, dir_hist, cov_hist))
     elif metric_optimized == 'relative_directness':
         for i in tqdm.tqdm(n_iter):
             new_m, choice = relative_directness_subtractive_step(
-                G, edgelist, sm, n_comp, keep_connected=keep_connected)
+                G, edgelist, sm, elected_nodes, keep_connected=keep_connected)
             edgelist, em, sm, geom, c_hist, dir_hist, cov_hist = (
                 _make_subtractive_changes(G, choice, edgelist, em, sm, geom,
                                           c_hist, dir_hist, cov_hist))
     elif metric_optimized == 'coverage':
         for i in tqdm.tqdm(n_iter):
             new_m, choice = coverage_subtractive_step(
-                G, edgelist, geom, n_comp, keep_connected=keep_connected)
+                G, edgelist, geom, elected_nodes, keep_connected=keep_connected)
             edgelist, em, sm, geom, c_hist, dir_hist, cov_hist = (
                 _make_subtractive_changes(G, choice, edgelist, em, sm, geom,
                               c_hist, dir_hist, cov_hist))
     elif metric_optimized == 'relative_coverage':
         for i in tqdm.tqdm(n_iter):
             new_m, choice = relative_coverage_subtractive_step(
-                G, edgelist, cov_hist[-1], geom, n_comp,
+                G, edgelist, cov_hist[-1], geom, elected_nodes,
                 keep_connected=keep_connected)
             edgelist, em, sm, geom, c_hist, dir_hist, cov_hist = (
                 _make_subtractive_changes(G, choice, edgelist, em, sm, geom,
@@ -180,7 +180,7 @@ def optimize_subtractive_growth(
     elif metric_optimized == 'global_efficiency':
         for i in tqdm.tqdm(n_iter):
             new_m, choice = global_efficiency_subtractive_step(
-                G, edgelist, em, n_comp, keep_connected=keep_connected)
+                G, edgelist, em, elected_nodes, keep_connected=keep_connected)
             edgelist, em, sm, geom, c_hist, dir_hist, cov_hist = (
                 _make_subtractive_changes(G, choice, edgelist, em, sm, geom,
                                           c_hist, dir_hist, cov_hist))
@@ -259,11 +259,35 @@ def _make_subtractive_changes(
     # We return updated value
     return edgelist, em, sm, geom, c_hist, dir_hist, cov_hist
 
+def _is_disconnected(G, elected_nodes):
+    # In some cases, removing an edge can create an isolated node
+    # that we will discard but increases the number of components,
+    # so we need to make sure to pass only the edges that create
+    # an additional components larger than 1 node.
+    if elected_nodes is None:
+        if (nx.number_connected_components(G) > 1) and (
+                len(sorted(nx.connected_components(G), key=len)[0]) > 1):
+            return True
+        else:
+            return False
+    else:
+        res = False
+        for cc in list(nx.connected_components(G)):
+            if len(cc) > 1:
+                test = False
+                for n in elected_nodes:
+                    if n in cc:
+                        test = True
+                if test is False:
+                    res = True
+        return res
+            
+
 
 # TODO: Optimize by finding minimum cut set of size 1 and remove these of the
 # edgelist we try instead of passing edges that disconnect the network
 def directness_subtractive_step(
-        G, edgelist, euclid_mat, n_comp, keep_connected = False):
+        G, edgelist, euclid_mat, elected_nodes, keep_connected = False):
     """
     Find the edge to remove on the graph G that optimizes the directness, 
     and that doesn't create an additional component if keep_connected is
@@ -284,10 +308,11 @@ def directness_subtractive_step(
     keep_connected : bool, optional
         If True, edges that can be removed are not creating a new 
         component. The default is False.
-    n_comp : int
-        Number of components of the initial network, 1 if there is no
-        built network, otherwise number of components of the
-        built network.
+    elected_nodes : None or list
+        If None, we don't have at the same time a built part with the
+        connectedness constraint. Else, the elected nodes are one
+        node of each built components, that we use to test if the
+        network is connected or not.
 
     Returns
     -------
@@ -304,13 +329,7 @@ def directness_subtractive_step(
         for edge in edgelist:
             H = G.copy()
             H.remove_edge(*edge)
-            # In some cases, removing an edge can create an isolated node
-            # that we will discard but increases the number of components,
-            # so we need to make sure to pass only the edges that create
-            # an additional components larger than 1 node.
-            if (nx.number_connected_components(H)
-                > n_comp) and (
-                    len(sorted(nx.connected_components(H), key=len)[0]) > 1):
+            if _is_disconnected(H, elected_nodes) is True:
                 pass
             else:
                 new_sm = metrics.get_shortest_network_path_matrix(H)
@@ -328,6 +347,7 @@ def directness_subtractive_step(
     try:
         new_m, choice = max(zip(batch_m, batch_choice))
     except:
+        print('batch_m =', batch_m)
         new_m = max(batch_m)
         index_max = max(range(len(batch_m)), key=batch_m.__getitem__)
         choice = batch_choice[index_max]
@@ -335,7 +355,7 @@ def directness_subtractive_step(
 
 
 def relative_directness_subtractive_step(
-        G, edgelist, shortest_mat, n_comp, keep_connected = False):
+        G, edgelist, shortest_mat, elected_nodes, keep_connected = False):
     """
     Find the edge to remove on the graph G that optimizes the relative
     directness, and that doesn't create an additional component if
@@ -357,10 +377,11 @@ def relative_directness_subtractive_step(
     keep_connected : bool, optional
         If True, edges that can be removed are not creating a new 
         component. The default is False.
-    n_comp : int
-        Number of components of the initial network, 1 if there is no
-        built network, otherwise number of components of the
-        built network.
+    elected_nodes : None or list
+        If None, we don't have at the same time a built part with the
+        connectedness constraint. Else, the elected nodes are one
+        node of each built components, that we use to test if the
+        network is connected or not.
 
     Returns
     -------
@@ -377,10 +398,7 @@ def relative_directness_subtractive_step(
         for edge in edgelist:
             H = G.copy()
             H.remove_edge(*edge)
-            # See directness_subtractive_step comment on this
-            if (nx.number_connected_components(H)
-                > n_comp) and (
-                    len(sorted(nx.connected_components(H), key=len)[0]) > 1):
+            if _is_disconnected(H, elected_nodes) is True:
                 pass
             else:
                 new_sm = metrics.get_shortest_network_path_matrix(H)
@@ -405,7 +423,7 @@ def relative_directness_subtractive_step(
 
 
 def global_efficiency_subtractive_step(
-        G, edgelist, em, n_comp, keep_connected = False):
+        G, edgelist, em, elected_nodes, keep_connected = False):
     """
     Find the edge to remove on the graph G that optimizes the global
     efficiency, and that doesn't create an additional component if
@@ -426,10 +444,11 @@ def global_efficiency_subtractive_step(
     keep_connected : bool, optional
         If True, edges that can be removed are not creating a new 
         component. The default is False.
-    n_comp : int
-        Number of components of the initial network, 1 if there is no
-        built network, otherwise number of components of the
-        built network.
+    elected_nodes : None or list
+        If None, we don't have at the same time a built part with the
+        connectedness constraint. Else, the elected nodes are one
+        node of each built components, that we use to test if the
+        network is connected or not.
 
     Returns
     -------
@@ -448,10 +467,7 @@ def global_efficiency_subtractive_step(
         for edge in edgelist:
             H = G.copy()
             H.remove_edge(*edge)
-            # See directness_subtractive_step comment on this
-            if (nx.number_connected_components(H)
-                > n_comp) and (
-                    len(sorted(nx.connected_components(H), key=len)[0]) > 1):
+            if _is_disconnected(H, elected_nodes) is True:
                 pass
             else:
                 new_em = iem.copy()
@@ -491,7 +507,7 @@ def global_efficiency_subtractive_step(
 
 
 def coverage_subtractive_step(
-        G, edgelist, geom, n_comp, keep_connected = False):
+        G, edgelist, geom, elected_nodes, keep_connected = False):
     """
     Find the edge to remove on the graph G that optimizes the coverage, 
     and that doesn't create an additional component if keep_connected is
@@ -511,10 +527,11 @@ def coverage_subtractive_step(
     keep_connected : bool, optional
         If True, edges that can be removed are not creating a new 
         component. The default is False.
-    n_comp : int
-        Number of components of the initial network, 1 if there is no
-        built network, otherwise number of components of the
-        built network.
+    elected_nodes : None or list
+        If None, we don't have at the same time a built part with the
+        connectedness constraint. Else, the elected nodes are one
+        node of each built components, that we use to test if the
+        network is connected or not.
 
     Returns
     -------
@@ -531,10 +548,7 @@ def coverage_subtractive_step(
         for edge in edgelist:
             H = G.copy()
             H.remove_edge(*edge)
-            # See directness_subtractive_step comment on this
-            if (nx.number_connected_components(H)
-                > n_comp) and (
-                    len(sorted(nx.connected_components(H), key=len)[0]) > 1):
+            if _is_disconnected(H, elected_nodes) is True:
                 pass
             else:
                 temp_g = geom.copy()
@@ -564,7 +578,7 @@ def coverage_subtractive_step(
 
 
 def relative_coverage_subtractive_step(
-        G, edgelist, bef_area, geom, n_comp, keep_connected = False):
+        G, edgelist, bef_area, geom, elected_nodes, keep_connected = False):
     """
     Find the edge to remove on the graph G that optimizes the relative
     coverage, and that doesn't create an additional component if
@@ -587,10 +601,11 @@ def relative_coverage_subtractive_step(
     keep_connected : bool, optional
         If True, edges that can be removed are not creating a new 
         component. The default is False.
-    n_comp : int
-        Number of components of the initial network, 1 if there is no
-        built network, otherwise number of components of the
-        built network.
+    elected_nodes : None or list
+        If None, we don't have at the same time a built part with the
+        connectedness constraint. Else, the elected nodes are one
+        node of each built components, that we use to test if the
+        network is connected or not.
 
     Returns
     -------
@@ -607,10 +622,7 @@ def relative_coverage_subtractive_step(
         for edge in edgelist:
             H = G.copy()
             H.remove_edge(*edge)
-            # See directness_subtractive_step comment on this
-            if (nx.number_connected_components(H)
-                > n_comp) and (
-                    len(sorted(nx.connected_components(H), key=len)[0]) > 1):
+            if _is_disconnected(H, elected_nodes) is True:
                 pass
             else:
                 temp_g = geom.copy()
@@ -707,7 +719,7 @@ def optimize_additive_growth(
 
 
     """
-    if metric_optimized not in ['directness', 'relative_coverage']:
+    if metric_optimized not in ['directness', 'relative_coverage', 'coverage']:
         raise ValueError("""
                          Wrong value for metric_optimized, see
                          documentation for valid metric name.
@@ -782,6 +794,15 @@ def optimize_additive_growth(
     elif metric_optimized == 'relative_coverage':
         for i in tqdm.tqdm(range(len(edgelist))):
             new_m, choice = relative_coverage_additive_step(
+                G, buff_size, project, actual_edges, edgelist,
+                cov_hist[-1], geom, keep_connected=keep_connected)
+            actual_edges, edgelist, geom, c_hist, cov_hist, dir_hist = (
+                _make_additive_changes(
+                    G, choice, buff_size, project, actual_edges, edgelist,
+                    geom, c_hist, cov_hist, dir_hist))
+    elif metric_optimized == 'coverage':
+        for i in tqdm.tqdm(range(len(edgelist))):
+            new_m, choice = coverage_additive_step(
                 G, buff_size, project, actual_edges, edgelist,
                 cov_hist[-1], geom, keep_connected=keep_connected)
             actual_edges, edgelist, geom, c_hist, cov_hist, dir_hist = (
@@ -1057,6 +1078,94 @@ def relative_coverage_additive_step(
         choice = batch_choice[index_max]
     return new_m, choice
 
+
+def coverage_additive_step(
+        G, buff_size, project, actual_edges, edgelist,
+        bef_area, geom, keep_connected = False):
+    """
+    Find the edge to add to the actual_edges list from the final graph G
+    that optimizes the coverage, and that doesn't create an
+    additional component if keep_connected is True. The buffer size
+    is determined by the BUFF_SIZE constant.
+
+    Parameters
+    ----------
+    G : networkx.classes.graph.Graph
+        Graph on which we want to remove an edge.
+    buff_size : float
+        Constant that determines the buffer that we apply on the edge's
+        geometry. For good results, the BUFFER_SIZE need to be the same
+        that the one used for other values from the geom dict.
+    project : pyproj.transformer.Transformer
+        Tranformer modifying the geographic crs to the
+        local projected crs of the graph.
+    actual_edges : list
+        List of the edges that are already created from G.
+    edgelist : list
+        List of the edges that we can add from G to actual_edges
+    bef_area : float
+        Area of the buffered edges of G.
+    geom : dict
+        Dictionary with edges of G as keys and the corresponding
+        buffered geometry as values.
+    keep_connected : bool, optional
+        If True, edges that can be added are not creating a new 
+        component. The default is False.
+
+    Returns
+    -------
+    new_m : float
+        Value of the coverage if the edge chosen is added
+        to actual_edges.
+    choice : tuple
+        Edge chosen that optimizes the relative coverage if added,
+        defined as the 2 nodes' ID (u,v).
+    """
+    batch_m = []
+    batch_choice = []
+    if keep_connected is True:
+        for edge in edgelist:
+            temp_edges = actual_edges.copy()
+            temp_edges.append(edge)
+            H = G.edge_subgraph(temp_edges).copy()
+            # See directness_subtractive_step comment on this
+            if (nx.number_connected_components(H)
+                > nx.number_connected_components(
+                    G.edge_subgraph(actual_edges))) and (
+                    len(sorted(nx.connected_components(H), key=len)[0]) > 1):
+                pass
+            else:
+                temp_g = geom.copy()
+                temp_g[edge] = shapely.ops.transform(
+                    project.transform,
+                    G.edges[edge]['geometry']).buffer(buff_size)
+                # See coverage_subtractive_step comment on this
+                batch_m.append(
+                    shapely.ops.unary_union(list(temp_g.values())).area)
+                batch_choice.append(edge)
+    else:
+        for edge in edgelist:
+            temp_g = geom.copy()
+            temp_g[edge] = shapely.ops.transform(
+                project.transform,
+                G.edges[edge]['geometry']).buffer(buff_size)
+            batch_m.append(
+                shapely.ops.unary_union(list(temp_g.values())).area)
+            batch_choice.append(edge)
+    # Need to try because sometimes the difference is so small that it 
+    # can't find one so will look into the edge instead of the metric
+    # to avoid this, we will find them individually
+    # We also maximize and not minimize compared to 
+    # relative_coverage_subtractive_step because here we want to grow as much
+    # as possible and not shrink as less as possible
+    try:
+        new_m, choice = max(zip(batch_m, batch_choice))
+    except:
+        new_m = max(batch_m)
+        index_max = max(range(len(batch_m)), key=batch_m.__getitem__)
+        choice = batch_choice[index_max]
+    return new_m, choice
+
 # TODO : Adapt subtractive connected mulitple built part growth
 def random_growth(
         G, folder_name, order, local_proj, buff_size = 500,
@@ -1188,16 +1297,23 @@ def random_growth(
         n_sub_iter = range(len(edgelist) - 1)
     if keep_connected is True:
         if order == 'subtractive':
+            if built is True:
+                built_components = list(
+                    nx.connected_components(
+                        G.edge_subgraph(
+                            [edge for edge in G.edges if
+                             G.edges[edge]['built'] == 1])))
+                elected_nodes = []
+                for cc in built_components:
+                    elected_nodes.append(list(G.subgraph(cc).nodes)[0])
+            else:
+                elected_nodes = None
             for i in tqdm.tqdm(n_sub_iter):
                 edge_batch = []
                 for edge in edgelist:
                     H = G.copy()
                     H.remove_edge(*edge)
-                    # See directness_subtractive_step comment on this
-                    if (nx.number_connected_components(H)
-                        > nx.number_connected_components(G)) and (
-                            len(sorted(
-                                nx.connected_components(H), key=len)[0]) > 1):
+                    if _is_disconnected(H, elected_nodes) is True:
                         pass
                     else:
                         edge_batch.append(edge)
@@ -1419,6 +1535,17 @@ def betweenness_growth(
         sub_removed_edge = edge_order[:-1]
     if keep_connected is True:
         if order == 'subtractive':
+            if built is True:
+                built_components = list(
+                    nx.connected_components(
+                        G.edge_subgraph(
+                            [edge for edge in G.edges if
+                             G.edges[edge]['built'] == 1])))
+                elected_nodes = []
+                for cc in built_components:
+                    elected_nodes.append(list(G.subgraph(cc).nodes)[0])
+            else:
+                elected_nodes = None
             while len(edge_order) > sub_n_last:
                 edge = None
                 count = 0
@@ -1426,11 +1553,7 @@ def betweenness_growth(
                     tested_edge = edge_order[count]
                     H = G.copy()
                     H.remove_edge(*tested_edge)
-                    # See directness_subtractive_step comment on this
-                    if (nx.number_connected_components(H)
-                        > nx.number_connected_components(G)) and (
-                            len(sorted(
-                                nx.connected_components(H), key=len)[0]) > 1):
+                    if _is_disconnected(H, elected_nodes) is True:
                         count += 1
                     else:
                         edge = tested_edge

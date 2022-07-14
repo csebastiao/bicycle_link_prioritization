@@ -11,7 +11,7 @@ import cv2
 import networkx as nx
 import osmnx as ox
 from blp import utils
-
+import seaborn as sns
 
 def plot_hysteresis(
         add_folder, sub_folder, show_metric = 'both', description = None):
@@ -40,6 +40,9 @@ def plot_hysteresis(
         Valid values are both, directness and coverage.
 
     """
+    mpl.rcParams.update({'font.size': 16})
+    sns.set_style('ticks')
+    palette = sns.color_palette('deep')
     if show_metric not in ['both', 'directness', 'coverage']:
         raise ValueError("""
                          Invalid value for show_metric input, please put
@@ -63,8 +66,8 @@ def plot_hysteresis(
         sub_val.reverse()
         fig = plt.figure(figsize=(18, 9))
         ax = fig.add_subplot(1, 1, 1)
-        ax.plot(range(len(add_val)), add_val, color='b', label='additive')
-        ax.plot(range(len(sub_val)), sub_val, color='r', label='subtractive')
+        ax.plot(range(len(add_val)), add_val, color=palette[0], label='additive')
+        ax.plot(range(len(sub_val)), sub_val, color=palette[3], label='subtractive')
         # Measure difference in area under curve between sub and add
         auc = (utils.get_area_under_curve(
             sub_val, normalize_x=normalize_x, normalize_y=normalize_y)
@@ -96,13 +99,13 @@ def plot_hysteresis(
         ax[1].set_xlabel("Step")
         ax[1].set_ylabel("Directness")
         ax[0].plot(
-            range(len(add_cov)), add_cov, color = 'b', label='additive')
+            range(len(add_cov)), add_cov, color = palette[0], label='additive')
         ax[0].plot(
-            range(len(sub_cov)), sub_cov, color = 'r', label='subtractive')
+            range(len(sub_cov)), sub_cov, color = palette[3], label='subtractive')
         ax[1].plot(
-            range(len(add_dir)), add_dir, color = 'b', label='additive')
+            range(len(add_dir)), add_dir, color = palette[0], label='additive')
         ax[1].plot(
-            range(len(sub_dir)), sub_dir, color = 'r', label='subtractive')
+            range(len(sub_dir)), sub_dir, color = palette[3], label='subtractive')
         auc_cov = (utils.get_area_under_curve(
             sub_cov, normalize_x=True, normalize_y=True)
             - utils.get_area_under_curve(
@@ -158,15 +161,17 @@ def plot_coverage_directness(
 
     """
     mpl.rcParams.update({'font.size': 16})
+    sns.set_style('ticks')
+    palette = sns.color_palette('deep')
     if optimized in ['coverage', 'relative_coverage']:
-        colors = ['r', 'b']
+        colors = [palette[3], palette[0]]
     elif optimized in ['directness', 'relative_directness',
                        'global_efficiency']:
-        colors = ['b', 'r']
+        colors = [palette[0], palette[3]]
     elif optimized == 'random':
-        colors = ['b', 'b']
+        colors = [palette[0], palette[0]]
     else:
-        colors = ['b', 'b']
+        colors = [palette[0], palette[0]]
         print("No valid optimized value as input, same color for both plot.")
     if coverage_name is None:
         with open(folder_name + "/arrcov.pickle", "rb") as fp:
@@ -405,7 +410,7 @@ def make_video_from_image(img_folder_name, reverse = False,
 # number of kilometers constructed, show it as a title or something ?
 def make_evolution_from_array(
         folder_name, G = None, order = 'subtractive',
-        built = False, cmap = 'Reds'):
+        built = False, cmap = 'coolwarm'):
     """
     Make a folder with images for every step of the growth of the
     graph from an array of the choice of the edge removed/added with 
@@ -433,6 +438,7 @@ def make_evolution_from_array(
         Raised if the order value is not valid.
 
     """
+    mpl.rc_file_defaults()
     if G is None: # name by default of the gpickle file with the graph
         G = nx.read_gpickle(folder_name + "/final_network.gpickle")
     PAD = len(str(len(G))) # number of 0 to pad to order images

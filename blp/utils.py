@@ -6,6 +6,7 @@ Useful functions
 
 import numpy as np
 import networkx as nx
+from sklearn.metrics import auc
 from haversine import haversine, haversine_vector
 
 
@@ -216,11 +217,15 @@ def add_edge_index(G):
     return H
 
 
-def get_area_under_curve(curve, normalize_y=False, normalize_x=False):
+def get_area_under_curve(curve, xx = None,
+                         normalize_y=False, normalize_x=False):
     """Get area under the curve to compare the efficiency of a curve"""
+    if xx is None:
+        xx = range(len(curve))
     if normalize_y is True:
         curve = (curve - np.min(curve)) / (np.max(curve) - np.min(curve))
     if normalize_x is True:
-        return np.trapz(curve, dx=1)/len(curve)
+        return (auc(xx, curve) - np.min(xx))/(
+            np.max(xx) - np.min(xx))
     else:
-        return np.trapz(curve, dx=1)
+        return auc(xx, curve)
