@@ -6,7 +6,6 @@ channels:
 dependencies:
   - python=3.9.7
   - numpy=1.20.3
-  - mkl-random=1.2.2
   - tqdm=4.62.3
   - haversine=2.5.1
   - shapely=1.8.0

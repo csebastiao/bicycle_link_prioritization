@@ -3,15 +3,17 @@
 Functions to visualize results of the growth of a graph.
 """
 
+
 import os
 import pickle
 import matplotlib as mpl
 from matplotlib import pyplot as plt
+import seaborn as sns
 import cv2
 import networkx as nx
 import osmnx as ox
 from blp import utils
-import seaborn as sns
+
 
 def plot_hysteresis(
         add_folder, sub_folder, show_metric = 'both', description = None):
@@ -40,6 +42,7 @@ def plot_hysteresis(
         Valid values are both, directness and coverage.
 
     """
+    # Set better default style
     mpl.rcParams.update({'font.size': 16})
     sns.set_style('ticks')
     palette = sns.color_palette('deep')
@@ -66,8 +69,10 @@ def plot_hysteresis(
         sub_val.reverse()
         fig = plt.figure(figsize=(18, 9))
         ax = fig.add_subplot(1, 1, 1)
-        ax.plot(range(len(add_val)), add_val, color=palette[0], label='additive')
-        ax.plot(range(len(sub_val)), sub_val, color=palette[3], label='subtractive')
+        ax.plot(range(len(add_val)), add_val, color=palette[0],
+                label='additive')
+        ax.plot(range(len(sub_val)), sub_val, color=palette[3],
+                label='subtractive')
         # Measure difference in area under curve between sub and add
         auc = (utils.get_area_under_curve(
             sub_val, normalize_x=normalize_x, normalize_y=normalize_y)
@@ -92,20 +97,23 @@ def plot_hysteresis(
         with open(sub_folder + '/arrcov.pickle', "rb") as fp:
             sub_cov = pickle.load(fp)
         sub_cov.reverse()
-        # Put ax instead of axs to return same thing in every cases
         fig, ax = plt.subplots(1, 2, figsize=(24, 12))
         ax[0].set_xlabel("Step")
         ax[0].set_ylabel("Coverage")
         ax[1].set_xlabel("Step")
         ax[1].set_ylabel("Directness")
         ax[0].plot(
-            range(len(add_cov)), add_cov, color = palette[0], label='additive')
+            range(len(add_cov)), add_cov, color = palette[0],
+            label='additive')
         ax[0].plot(
-            range(len(sub_cov)), sub_cov, color = palette[3], label='subtractive')
+            range(len(sub_cov)), sub_cov, color = palette[3],
+            label='subtractive')
         ax[1].plot(
-            range(len(add_dir)), add_dir, color = palette[0], label='additive')
+            range(len(add_dir)), add_dir, color = palette[0],
+            label='additive')
         ax[1].plot(
-            range(len(sub_dir)), sub_dir, color = palette[3], label='subtractive')
+            range(len(sub_dir)), sub_dir, color = palette[3],
+            label='subtractive')
         auc_cov = (utils.get_area_under_curve(
             sub_cov, normalize_x=True, normalize_y=True)
             - utils.get_area_under_curve(
@@ -135,13 +143,14 @@ def plot_coverage_directness(
         folder_name, optimized = None, coverage_name = None,
         directness_name = None, save = False):
     """
-    
+    Plot both the coverage and the directness. Highlighted in red is 
+    the metric that is optimized, if there is one.
 
     Parameters
     ----------
     folder_name : str
         Path to the folder where the files for the coverage and the
-        directness are.
+        directness arrays are.
     optimized : str, optional
         Specify which metric was optimized to produce those values.
         coverage and relative_coverage will mark the coverage plot
@@ -160,6 +169,7 @@ def plot_coverage_directness(
         If True, save the figure in the folder. The default is False.
 
     """
+    # Set better default style
     mpl.rcParams.update({'font.size': 16})
     sns.set_style('ticks')
     palette = sns.color_palette('deep')
@@ -168,11 +178,9 @@ def plot_coverage_directness(
     elif optimized in ['directness', 'relative_directness',
                        'global_efficiency']:
         colors = [palette[0], palette[3]]
-    elif optimized == 'random':
-        colors = [palette[0], palette[0]]
     else:
         colors = [palette[0], palette[0]]
-        print("No valid optimized value as input, same color for both plot.")
+        print("No optimized value as input, same color for both plot.")
     if coverage_name is None:
         with open(folder_name + "/arrcov.pickle", "rb") as fp:
             cov_history = pickle.load(fp)
@@ -411,33 +419,6 @@ def make_video_from_image(img_folder_name, reverse = False,
 def make_evolution_from_array(
         folder_name, G = None, order = 'subtractive',
         built = False, cmap = 'coolwarm'):
-    """
-    Make a folder with images for every step of the growth of the
-    graph from an array of the choice of the edge removed/added with 
-    the subtractive/additive growth.
-
-    Parameters
-    ----------
-    folder_name : str
-        Name of the folder for the images.
-    G : networkx.classes.graph.Graph, optional
-        Final network. If None, read a gpickle file based on 
-        folder_name. The default is None.
-    order : str, optional
-        Order of the history, either subtractive or additive.
-        The default is 'subtractive'.
-    built : bool, optional
-        If True, find and color differently the already built network
-        that is fixed and the planned network. The default is False.
-    cmap : str, optional
-        Name of the colormap used. The default is 'Reds'.
-
-    Raises
-    ------
-    ValueError
-        Raised if the order value is not valid.
-
-    """
     mpl.rc_file_defaults()
     if G is None: # name by default of the gpickle file with the graph
         G = nx.read_gpickle(folder_name + "/final_network.gpickle")

@@ -68,10 +68,10 @@ if __name__ == "__main__":
 
     name = f"../data/test/s{RAD}_copenhagen_multiple"
 
-    orders = ['subtractive', 'additive']
-    list_built = [True, False]
-    list_connected = [True, False]
-    strat_list = ['random', 'betweenness', 'greedy_optimization']
+    orders = ['subtractive']
+    list_built = [True]
+    list_connected = [True]
+    strat_list = ['random']
     metric_list = ['directness', 'coverage', 'relative_coverage']
     for built in list_built:
         for connected in list_connected:
